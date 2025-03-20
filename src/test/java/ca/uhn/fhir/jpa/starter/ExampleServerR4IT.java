@@ -41,6 +41,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -69,6 +70,7 @@ import static org.opencds.cqf.fhir.utility.r4.Parameters.stringPart;
 	"hapi.fhir.cr.enabled=true",
 	"hapi.fhir.cr.caregaps.section_author=Organization/alphora-author",
 	"hapi.fhir.cr.caregaps.reporter=Organization/alphora",
+	"hapi.fhir.cr.cql.data.search_parameter_mode=USE_SEARCH_PARAMETERS",
 	"hapi.fhir.implementationguides.dk-core.name=hl7.fhir.dk.core",
 	"hapi.fhir.implementationguides.dk-core.version=1.1.0",
 	"hapi.fhir.auto_create_placeholder_reference_targets=true",
@@ -116,7 +118,7 @@ class ExampleServerR4IT implements IServerSupport {
 		Parameters inParams = new Parameters();
 		inParams.addParameter().setName("periodStart").setValue(new StringType("2019-01-01"));
 		inParams.addParameter().setName("periodEnd").setValue(new StringType("2019-12-31"));
-		inParams.addParameter().setName("reportType").setValue(new StringType("summary"));
+		inParams.addParameter().setName("reportType").setValue(new StringType("population"));
 
 		Parameters outParams = ourClient
 			.operation()
@@ -314,13 +316,46 @@ class ExampleServerR4IT implements IServerSupport {
 
 	@ParameterizedTest
 	@ValueSource(strings = {"prometheus", "health", "metrics", "info"})
-	void testActuatorEndpointExists(String endpoint) throws IOException {
+	void testActuatorEndpointExists(String endpoint) throws IOException, URISyntaxException {
 
 		CloseableHttpClient httpclient = HttpClients.createDefault();
-		CloseableHttpResponse response = httpclient.execute(new HttpGet("http://localhost:" + port + "/actuator/" + endpoint));
+		CloseableHttpResponse response = httpclient.execute(new HttpGet(new URI("http", null, "localhost", port, "/actuator/" + endpoint, null, null)));
 		int statusCode = response.getStatusLine().getStatusCode();
 		assertEquals(200, statusCode);
 
+	}
+
+	@Test
+	void testDiffOperationIsRegistered() {
+		String methodName = "testDiff";
+		ourLog.info("Entering " + methodName + "()...");
+
+		Patient pt = new Patient();
+		pt.setActive(true);
+		pt.getBirthDateElement().setValueAsString("2020-01-01");
+		pt.addIdentifier().setSystem("http://foo").setValue("12345");
+		pt.addName().setFamily(methodName);
+		IIdType id = ourClient.create().resource(pt).execute().getId();
+
+		//now update the patient
+		pt.setId(id);
+		pt.getBirthDateElement().setValueAsString("2025-01-01");
+		ourClient.update().resource(pt).execute();
+
+		//now try a diff
+		Parameters outParams = ourClient.operation().onInstance(id).named("$diff").withNoParameters(Parameters.class).execute();
+		ourLog.trace("Params->\n{}", ourCtx.newJsonParser().setPrettyPrint(true).encodeResourceToString(outParams));
+		boolean foundDobChange = false;
+		//really, if we get a response at all, then the Diff worked, but we'll check the contents here anyway for good measure to see that our change is reflected
+		for(Parameters.ParametersParameterComponent ppc : outParams.getParameter() ) {
+			for(Parameters.ParametersParameterComponent ppc2 : ppc.getPart() ) {
+				if( "Patient.birthDate".equals(ppc2.getValue().toString()) ){
+					foundDobChange = true;
+					break;
+				}
+			}
+		}
+		assertTrue(foundDobChange);
 	}
 
 	@BeforeEach
@@ -336,4 +371,5 @@ class ExampleServerR4IT implements IServerSupport {
 		//	return activeSubscriptionCount() == 2; // 2 subscription based on mdm-rules.json
 		//});
 	}
+
 }
