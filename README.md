@@ -1,4 +1,4 @@
-# HAPI-FHIR Starter Project (Cohorting Fork) 
+# HAPI-FHIR Starter Project
 
 A fork of [hapi-fhir-jpaserver-starter](https://github.com/hl7-eu/hapi-fhir-jpaserver-starter) with added support for research study cohorting operations.
 
