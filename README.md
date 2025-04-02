@@ -31,7 +31,7 @@ In order to use this sample, you should have:
 ## New Features  
 - **Cohorting**: `$cohorting` operation to generate patient cohorts using CQL logic. 
 - **Endpoint**:  
-```http
+  ```http
 POST [base]/ResearchStudy/$cohorting
 
 ## Running via [Docker Hub](https://hub.docker.com/r/hapiproject/hapi)
