@@ -1,4 +1,6 @@
-# HAPI-FHIR Starter Project
+# HAPI-FHIR Starter Project (Cohorting Fork) 
+
+A fork of [hapi-fhir-jpaserver-starter](https://github.com/hl7-eu/hapi-fhir-jpaserver-starter) with added support for research study cohorting operations.
 
 This project is a complete starter project you can use to deploy a FHIR server using HAPI FHIR JPA.
 
@@ -25,6 +27,12 @@ In order to use this sample, you should have:
 
 ### or
  - Docker, as the entire project can be built using multistage docker (with both JDK and maven wrapped in docker) or used directly from [Docker Hub](https://hub.docker.com/r/hapiproject/hapi)
+
+## 🚀 New Features  
+- **Cohorting**: `$cohorting` operation to generate patient cohorts using CQL logic. 
+- **Endpoint**:  
+  ```http
+  POST [base]/ResearchStudy/$cohorting
 
 ## Running via [Docker Hub](https://hub.docker.com/r/hapiproject/hapi)
 
