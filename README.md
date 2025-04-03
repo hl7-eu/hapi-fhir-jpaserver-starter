@@ -26,6 +26,12 @@ In order to use this sample, you should have:
 ### or
  - Docker, as the entire project can be built using multistage docker (with both JDK and maven wrapped in docker) or used directly from [Docker Hub](https://hub.docker.com/r/hapiproject/hapi)
 
+## New Features  
+- **Cohorting**: `$cohorting` operation to generate patient cohorts using CQL logic. 
+- **Endpoint**:  
+  ```http
+POST [base]/ResearchStudy/$cohorting
+
 ## Running via [Docker Hub](https://hub.docker.com/r/hapiproject/hapi)
 
 Each tagged/released version of `hapi-fhir-jpaserver` is built as a Docker image and published to Docker hub. To run the published Docker image from DockerHub:
