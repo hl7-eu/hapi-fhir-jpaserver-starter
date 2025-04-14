@@ -1,6 +1,5 @@
 package ca.uhn.fhir.jpa.starter.cohort.service.r5;
 
-import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.hl7.elm.r1.ExpressionDef;
 import org.hl7.fhir.r5.model.*;
@@ -13,8 +12,6 @@ import org.springframework.beans.factory.annotation.Value;
 import java.util.List;
 
 public class CohorteEvaluation {
-	@Value("${app.anonymization.encryption-key}")
-	private String encryptionKey;
 	private static final Logger logger = LoggerFactory.getLogger(CohorteEvaluation.class);
 	private final CqlEngine cqlEngine;
 
@@ -24,6 +21,7 @@ public class CohorteEvaluation {
 
 	/**
 	 * Evaluates the cohort for the provided ResearchStudy.
+	 *
 	 * @param researchStudy    The ResearchStudy that is the basis for cohort evaluation.
 	 * @param evidenceVariable The EvidenceVariable containing the definition expression for evaluation.
 	 * @param subjectIds       A list of subject identifiers (each must be in the format {subjectType}/{subjectId}).
@@ -84,8 +82,11 @@ public class CohorteEvaluation {
 	 * @return The pseudonymized identifier.
 	 */
 	public String pseudonymizeRealId(String realId) {
-		String encryptedId = realId + encryptionKey;
-		return DigestUtils.sha256Hex(encryptedId);
+		try {
+			return CryptoUtils.encrypt(realId);
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	/**
