@@ -9,8 +9,6 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class CohorteOperationProvider {
-	@Autowired
-	CohorteService cohorteService;
 
 	/**
 	 * Provides the implementation of the FHIR operation <a href=
@@ -30,6 +28,7 @@ public class CohorteOperationProvider {
 		@OperationParam(name = "researchStudyEndpoint") Endpoint researchStudyEndpoint,
 		@OperationParam(name = "dataEndpoint") Endpoint dataEndpoint,
 		@OperationParam(name = "terminologyEndpoint") Endpoint theTerminologyEndpoint) {
+		CohorteService cohorteService = new CohorteService();
 		return cohorteService.cohorting(researchStudyUrl, researchStudyEndpoint, dataEndpoint, theTerminologyEndpoint);
 	}
 }
