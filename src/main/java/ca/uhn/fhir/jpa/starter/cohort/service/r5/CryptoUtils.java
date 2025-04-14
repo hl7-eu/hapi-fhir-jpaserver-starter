@@ -7,7 +7,7 @@ import java.util.Base64;
 
 public class CryptoUtils {
 
-	private static final String ENCRYPTION_KEY = "1234567890123456"; // 16 caractères = 128 bits
+	private static final String ENCRYPTION_KEY = "1234567890123456"; 
 	private static final String ALGORITHM = "AES";
 
 	public static String encrypt(String realId) throws Exception {
@@ -15,7 +15,7 @@ public class CryptoUtils {
 		Cipher cipher = Cipher.getInstance(ALGORITHM);
 		cipher.init(Cipher.ENCRYPT_MODE, key);
 		byte[] encryptedBytes = cipher.doFinal(realId.getBytes());
-		return new BigInteger(1, encryptedBytes).toString(16); // 👉 HEX string
+		return new BigInteger(1, encryptedBytes).toString(16); 
 	}
 
 	public static String decrypt(String encryptedId) throws Exception {
