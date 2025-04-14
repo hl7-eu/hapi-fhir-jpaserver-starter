@@ -2,4 +2,4 @@ hapi:
   fhir:
     fhir_version: R5
     custom_provider_classes:
-      - ca.uhn.fhir.jpa.starter.cohort.provider.r5.CohorteOperationProvider
+      - ca.uhn.fhir.jpa.starter.cohort.provider.r5.CohorteProvider

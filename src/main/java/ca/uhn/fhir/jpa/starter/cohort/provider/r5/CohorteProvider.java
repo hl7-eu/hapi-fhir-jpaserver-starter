@@ -1,14 +1,28 @@
 package ca.uhn.fhir.jpa.starter.cohort.provider.r5;
 
+import ca.uhn.fhir.context.FhirContext;
+import ca.uhn.fhir.jpa.starter.cohort.service.r5.CohorteEvaluationOptions;
 import ca.uhn.fhir.jpa.starter.cohort.service.r5.CohorteService;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 import org.hl7.fhir.r5.model.*;
+import org.opencds.cqf.fhir.utility.repository.RestRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
-public class CohorteOperationProvider {
+public class CohorteProvider {
+
+	private static final Logger logger = LoggerFactory.getLogger(CohorteProvider.class);
+
+	@Value("${remote.url}")
+	private String remoteUrl;
+
+	@Autowired
+	private FhirContext context;
 
 	/**
 	 * Provides the implementation of the FHIR operation <a href=
@@ -28,7 +42,8 @@ public class CohorteOperationProvider {
 		@OperationParam(name = "researchStudyEndpoint") Endpoint researchStudyEndpoint,
 		@OperationParam(name = "dataEndpoint") Endpoint dataEndpoint,
 		@OperationParam(name = "terminologyEndpoint") Endpoint theTerminologyEndpoint) {
-		CohorteService cohorteService = new CohorteService();
-		return cohorteService.cohorting(researchStudyUrl, researchStudyEndpoint, dataEndpoint, theTerminologyEndpoint);
+		new CohorteEvaluationOptions();
+		return new CohorteService(new RestRepository(context.getRestfulClientFactory().newGenericClient(remoteUrl)), CohorteEvaluationOptions.defaultOptions())
+			.cohorting(researchStudyUrl, researchStudyEndpoint, dataEndpoint, theTerminologyEndpoint);
 	}
 }
