@@ -1,17 +1,31 @@
 package ca.uhn.fhir.jpa.starter.cohort.r5;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
-
+import ca.uhn.fhir.jpa.starter.cohort.service.r5.CohorteEvaluation;
 import ca.uhn.fhir.jpa.starter.cohort.service.r5.CohorteEvaluationOptions;
 import ca.uhn.fhir.jpa.starter.cohort.service.r5.CohorteProcessor;
 import ca.uhn.fhir.jpa.starter.cohort.service.r5.RepositorySubjectProvider;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
+import org.cqframework.cql.cql2elm.LibraryManager;
+import org.cqframework.cql.cql2elm.model.CompiledLibrary;
 import org.hl7.fhir.r5.model.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedConstruction;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+import org.opencds.cqf.cql.engine.execution.CqlEngine;
+import org.opencds.cqf.cql.engine.execution.Environment;
+import org.opencds.cqf.cql.engine.execution.State;
 import org.opencds.cqf.fhir.api.Repository;
+import org.opencds.cqf.fhir.cql.Engines;
+import org.opencds.cqf.fhir.cql.EvaluationSettings;
+
+import java.util.Collections;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class CohorteProcessorTest {
 
@@ -19,6 +33,11 @@ class CohorteProcessorTest {
     private CohorteEvaluationOptions options;
     private RepositorySubjectProvider subjectProvider;
     private CohorteProcessor processor;
+    private CqlEngine engine;
+    private Environment environment;
+    private LibraryManager libraryManager;
+    private State state;
+    private CompiledLibrary compiledLibrary;
 
     @BeforeEach
     void setup() {
@@ -26,6 +45,51 @@ class CohorteProcessorTest {
         options = mock(CohorteEvaluationOptions.class);
         subjectProvider = mock(RepositorySubjectProvider.class);
         processor = new CohorteProcessor(repository, options, subjectProvider);
+        // CQL engine Config
+        engine = mock(CqlEngine.class);
+        environment = mock(Environment.class);
+        libraryManager = mock(LibraryManager.class);
+        state = mock(State.class);
+        compiledLibrary = mock(CompiledLibrary.class);
+
+        when(options.getEvaluationSettings()).thenReturn(EvaluationSettings.getDefault());
+        when(engine.getEnvironment()).thenReturn(environment);
+        when(engine.getState()).thenReturn(state);
+        when(environment.getLibraryManager()).thenReturn(libraryManager);
+
+        when(libraryManager.resolveLibrary(any())).thenReturn(compiledLibrary);
+    }
+
+    @Test
+    void CohortingNormalFlow() {
+        // Arrange
+        String libraryUrl = "http://base-url/Library/Test123";
+        ResearchStudy study = createResearchStudyWithValidEligibility("study1");
+        EvidenceVariable evidenceVariable = createValidEvidenceVariable(libraryUrl);
+        when(repository.read(eq(EvidenceVariable.class), any(IdType.class)))
+                .thenReturn(evidenceVariable);
+        when(repository.search(eq(Bundle.class), eq(Library.class), any(), isNull()))
+                .thenReturn(createLibraryBundle());
+        when(subjectProvider.getSubjects(eq(repository), Collections.singletonList(any())))
+                .thenReturn(java.util.stream.Stream.of("Patient/123"));
+
+        try (MockedStatic<Engines> enginesMock = Mockito.mockStatic(Engines.class)) {
+            enginesMock.when(() -> Engines.forRepository(eq(repository), any(), isNull()))
+                    .thenReturn(engine);
+
+            try (MockedConstruction<CohorteEvaluation> mockedEvaluation =
+                         Mockito.mockConstruction(CohorteEvaluation.class, (mock, context) -> {
+                             when(mock.evaluate(any(ResearchStudy.class), any(EvidenceVariable.class), anyList()))
+                                     .thenReturn(new Group());
+                         })) {
+
+                // Act
+                Group result = processor.cohorting(study);
+
+                assertNotNull(result);
+                assertEquals(1, mockedEvaluation.constructed().size());
+            }
+        }
     }
 
     @Test
@@ -100,5 +164,13 @@ class CohorteProcessorTest {
         ext.setValue(new CanonicalType(libraryUrl));
         ev.addExtension(ext);
         return ev;
+    }
+
+    private Bundle createLibraryBundle() {
+        Bundle libraryBundle = new Bundle();
+        Library library = new Library();
+        library.setUrl("http://library-url");
+        libraryBundle.addEntry(new Bundle.BundleEntryComponent().setResource(library));
+        return libraryBundle;
     }
 }
