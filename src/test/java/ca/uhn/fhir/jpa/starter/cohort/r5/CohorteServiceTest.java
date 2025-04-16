@@ -56,6 +56,7 @@ class CohorteServiceTest {
     void CohortingNormalFlow() {
 
         Bundle study = createStudyBundle();
+        ResearchStudy researchStudy = (ResearchStudy) study.getEntry().get(0).getResource();
         when(repository.search(eq(Bundle.class), eq(ResearchStudy.class), any(), isNull()))
                 .thenReturn(study);
 
@@ -77,6 +78,9 @@ class CohorteServiceTest {
 
                 // Assert
                 assertNotNull(result);
+                assertEquals("group-" + researchStudy.getIdElement().getIdPart(), result.getId());
+                assertNotNull(researchStudy.getRecruitment().getActualGroup());
+
             }
         }
     }
