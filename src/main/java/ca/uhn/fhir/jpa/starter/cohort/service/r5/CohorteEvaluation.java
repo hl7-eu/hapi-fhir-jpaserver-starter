@@ -28,7 +28,7 @@ public class CohorteEvaluation {
 	 * @return A Group resource containing the subjects that meet the evaluation criteria.
 	 * @throws RuntimeException if any subject identifier is {@code null}.
 	 */
-	protected Group evaluate(ResearchStudy researchStudy, EvidenceVariable evidenceVariable, List<String> subjectIds) {
+	public Group evaluate(ResearchStudy researchStudy, EvidenceVariable evidenceVariable, List<String> subjectIds) {
 		logger.info("Evaluating Cohort {} with {} subject(s)", researchStudy.getUrl(), subjectIds.size());
 		Group group = new Group();
 		for (String subjectId : subjectIds) {
@@ -56,7 +56,7 @@ public class CohorteEvaluation {
 	 * @param subjectId        The identifier of the subject.
 	 * @throws IllegalArgumentException if the EvidenceVariable is missing the definition expression.
 	 */
-	protected void evaluateVariableDefinition(Group group, EvidenceVariable evidenceVariable, String subjectType, String subjectId) {
+	public void evaluateVariableDefinition(Group group, EvidenceVariable evidenceVariable, String subjectType, String subjectId) {
 		String definitionExpression = evidenceVariable.getCharacteristic().stream().findFirst()
 			.map(EvidenceVariable.EvidenceVariableCharacteristicComponent::getDefinitionByCombination)
 			.map(EvidenceVariable.EvidenceVariableCharacteristicDefinitionByCombinationComponent::getCharacteristic)
@@ -95,7 +95,7 @@ public class CohorteEvaluation {
 	 * @param criteriaExpression The CQL expression to evaluate.
 	 * @return The result of the evaluated expression.
 	 */
-	protected Object evaluateDefinitionExpression(String criteriaExpression) {
+	public Object evaluateDefinitionExpression(String criteriaExpression) {
 		ExpressionDef ref = Libraries.resolveExpressionRef(criteriaExpression, this.cqlEngine.getState().getCurrentLibrary());
 		Object result = this.cqlEngine.getEvaluationVisitor().visitExpressionDef(ref, this.cqlEngine.getState());
 		return result;
@@ -108,7 +108,7 @@ public class CohorteEvaluation {
 	 * @return A Pair where the left element is the subject type and the right element is the subject identifier.
 	 * @throws IllegalArgumentException if the subject identifier does not follow the required format.
 	 */
-	protected Pair<String, String> getSubjectTypeAndId(String subjectId) {
+	public Pair<String, String> getSubjectTypeAndId(String subjectId) {
 		if (subjectId.contains("/")) {
 			String[] subjectIdParts = subjectId.split("/");
 			return Pair.of(subjectIdParts[0], subjectIdParts[1]);
