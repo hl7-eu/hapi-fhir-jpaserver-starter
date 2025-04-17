@@ -26,6 +26,13 @@ In order to use this sample, you should have:
 ### or
  - Docker, as the entire project can be built using multistage docker (with both JDK and maven wrapped in docker) or used directly from [Docker Hub](https://hub.docker.com/r/hapiproject/hapi)
 
+## New Features  
+- **Datamart Generation**: `$generate-datamart` operation to creates a patient datamart by executing CQL logic against a `ResearchStudy` resource.
+
+- **Endpoint**:  
+  ```http
+POST [base]/ResearchStudy/$generate-datamart
+
 ## Running via [Docker Hub](https://hub.docker.com/r/hapiproject/hapi)
 
 Each tagged/released version of `hapi-fhir-jpaserver` is built as a Docker image and published to Docker hub. To run the published Docker image from DockerHub:
