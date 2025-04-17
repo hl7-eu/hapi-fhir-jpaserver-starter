@@ -35,33 +35,40 @@ POST [base]/ResearchStudy/$cohorting
 ## Managing FHIR Version via Spring Profiles
 
 To keep R4- and R5-specific settings separate, we use Spring Boot profiles:
-1. **Profile files**
-  ```text
-  src/main/resources/
-    ├─ application-r4.yaml
-    └─ application-r5.yaml
 
-2. **Per-versnion settings application-r5.yaml**
-  ```yaml
-  hapi:
-  fhir:
-    fhir_version: R5
-    custom_provider_classes:
-      - ca.uhn.fhir.jpa.starter.cohort.provider.r5.CohorteProvider
+1. **Profile files**
+
+   ```text
+   src/main/resources/
+     ├─ application-r4.yaml
+     └─ application-r5.yaml
+
+2. **Per-version settings application-r5.yaml**
+
+   ```yaml
+   hapi:
+     fhir:
+       fhir_version: R5
+       custom_provider_classes:
+         - ca.uhn.fhir.jpa.starter.cohort.provider.r5.CohorteProvider
 
 3. **Activate at startup**
 
-- **Maven/CLI**
-  ```bash
-  mvn spring-boot:run -Drun.profiles=r5   # or r4
+   - **Maven/CLI**
+     ```bash
+     mvn spring-boot:run -Drun.profiles=r5   # or r4
+     ```
 
-- **Jar**
-  ```bash
-  java -jar target/ROOT.war --spring.profiles.active=r5
+   - **Jar**
+     ```bash
+     java -jar target/ROOT.war --spring.profiles.active=r5
+     ```
 
-- **Docker**
-  ```bash
-  docker run -e SPRING_PROFILES_ACTIVE=r5 -p 8080:8080 hapiproject/hapi:latest
+   - **Docker**
+     ```bash
+     docker run -e SPRING_PROFILES_ACTIVE=r5 -p 8080:8080 hapiproject/hapi:latest
+     ```
+
 
 ## Running via [Docker Hub](https://hub.docker.com/r/hapiproject/hapi)
 
