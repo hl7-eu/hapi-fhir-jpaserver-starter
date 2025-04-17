@@ -35,7 +35,7 @@ public class CohorteProcessor {
 	 * @throws ResourceNotFoundException if no {@link Library} resource can be found using the extracted library URL.
 	 * @throws IllegalStateException if the CQL/ELM library cannot be resolved or loaded due to a CQL include exception.
 	 */
-	protected Group cohorting(
+	public Group cohorting(
 		ResearchStudy researchStudy
 	) {
 		if (!researchStudy.getRecruitment().hasEligibility()) {
