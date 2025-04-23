@@ -1,4 +1,4 @@
-package ca.uhn.fhir.jpa.starter.datamart.service.r5;
+package ca.uhn.fhir.jpa.starter.datamart.service;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;

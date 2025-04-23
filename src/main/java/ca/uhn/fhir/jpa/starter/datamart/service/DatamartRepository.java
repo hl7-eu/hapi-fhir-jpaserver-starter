@@ -1,4 +1,4 @@
-package ca.uhn.fhir.jpa.starter.datamart.service.r5;
+package ca.uhn.fhir.jpa.starter.datamart.service;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.model.api.IQueryParameterType;

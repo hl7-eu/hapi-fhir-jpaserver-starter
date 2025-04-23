@@ -1,4 +1,4 @@
-package ca.uhn.fhir.jpa.starter.datamart.service.r5;
+package ca.uhn.fhir.jpa.starter.datamart.service;
 
 import org.opencds.cqf.fhir.cql.EvaluationSettings;
 import org.opencds.cqf.fhir.utility.ValidationProfile;
