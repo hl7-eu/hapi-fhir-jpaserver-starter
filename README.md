@@ -33,6 +33,12 @@ In order to use this sample, you should have:
   ```http
 POST [base]/ResearchStudy/$generate-datamart
 
+- **Datamart Export**: `$export-datamart` operation to export a patient datamart by executing a mapping by a StructureMap of the evaluation parameters.
+
+- **Endpoint**:
+  ```http
+POST [base]/ResearchStudy/$export-datamart
+
 ## Managing FHIR Version via Spring Profiles
 
 To keep R4- and R5-specific settings separate, we use Spring Boot profiles:
