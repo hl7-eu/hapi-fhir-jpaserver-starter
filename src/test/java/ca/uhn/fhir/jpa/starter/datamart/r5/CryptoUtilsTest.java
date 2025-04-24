@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class CryptoUtilsTest {
 
 	@Test
-	void TestEncryptAndDecryptPatientId() throws Exception {
+	void encryptAndDecryptPatientId() throws Exception {
 		String originalId = "patient-12345";
 
 		String encrypted = CryptoUtils.encrypt(originalId);
@@ -20,13 +20,13 @@ class CryptoUtilsTest {
 	}
 
 	@Test
-	void TestEncryptWithSameInput() throws Exception {
+	void encryptWithSameInput() throws Exception {
 		String id = "same-input";
 
 		String encrypted1 = CryptoUtils.encrypt(id);
 		String encrypted2 = CryptoUtils.encrypt(id);
 
-		assertEquals(encrypted1, encrypted2); // AES with same key, same input = deterministic output
+		assertEquals(encrypted1, encrypted2);
 	}
 
 	@Test
@@ -39,12 +39,19 @@ class CryptoUtilsTest {
 	}
 
 	@Test
-	void TestEncryptDecryptWithEmptyString() throws Exception {
+	void encryptDecryptWithEmptyString() throws Exception {
 		String empty = "";
 
 		String encrypted = CryptoUtils.encrypt(empty);
 		String decrypted = CryptoUtils.decrypt(encrypted);
 
 		assertEquals(empty, decrypted);
+	}
+
+	@Test
+	void decryptWithLeadingZeroByte() {
+		String hexWithLeadingZero = "80";
+
+		assertThrows(Exception.class, () -> CryptoUtils.decrypt(hexWithLeadingZero));
 	}
 }

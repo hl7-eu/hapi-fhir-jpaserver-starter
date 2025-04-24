@@ -1,10 +1,10 @@
 package ca.uhn.fhir.jpa.starter.datamart.r5;
-import ca.uhn.fhir.jpa.starter.cohort.service.r5.CohorteEvaluation;
+
+import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.jpa.starter.datamart.service.r5.DatamartGeneration;
-import org.hl7.elm.r1.ExpressionDef;
-import org.hl7.elm.r1.Library;
+import ca.uhn.fhir.rest.api.MethodOutcome;
+import org.apache.commons.lang3.tuple.Pair;
 import org.hl7.elm.r1.VersionedIdentifier;
-import org.hl7.fhir.instance.model.api.IBaseParameters;
 import org.hl7.fhir.r5.model.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,112 +12,148 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.opencds.cqf.cql.engine.execution.CqlEngine;
-import org.opencds.cqf.cql.engine.execution.EvaluationVisitor;
+import org.opencds.cqf.cql.engine.execution.EvaluationResult;
 import org.opencds.cqf.cql.engine.execution.State;
 import org.opencds.cqf.fhir.api.Repository;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-public class DatamartGenerationTest {
-	@Mock
-	private CqlEngine cqlEngine;
-	@Mock
-	private State engineState;
-	@Mock
-	private EvaluationVisitor evaluationVisitor;
-	@Mock
-	private org.hl7.elm.r1.Library elmLibrary;
-	@Mock
-	private Library.Statements elmStatements;
-	@Mock
-	private ExpressionDef expressionDef;
-	@Mock
-	private Repository repository;
 
-	private DatamartGeneration datamartGeneration;
-	private ResearchStudy researchStudy;
-	private EvidenceVariable evidenceVariable;
-	private Parameters parameters;
+@ExtendWith(MockitoExtension.class)
+class DatamartGenerationTest {
 
-	@BeforeEach
-	void setUp() {
-		// CQL Configuration
-		when(cqlEngine.getState()).thenReturn(engineState);
-		when(cqlEngine.evaluate((VersionedIdentifier) any(), Collections.singleton(any()))).thenReturn(evaluationVisitor);
-		when(engineState.getCurrentLibrary()).thenReturn(elmLibrary);
-		when(elmLibrary.getStatements()).thenReturn(elmStatements);
-		when(elmStatements.getDef()).thenReturn(List.of(expressionDef));
-		when(expressionDef.getName()).thenReturn("TestExpression");
+    @Mock
+    private CqlEngine cqlEngine;
+    @Mock
+    private Repository repository;
+    @Mock
+    private MethodOutcome methodOutcome;
+    @Mock
+    private State engineState;
 
-		datamartGeneration = new DatamartGeneration(cqlEngine, repository);
-		researchStudy = new ResearchStudy().setUrl("http://example.com/study");
-		evidenceVariable = new EvidenceVariable().setUrl("http://example.com/evidence");
-		parameters.addParameter("psa", "boolean");
-		parameters.addParameter("subject", "Patient/123");
-	}
+
+    private DatamartGeneration service;
+    private ResearchStudy researchStudy;
+    private EvidenceVariable evidenceVariable;
+    private VersionedIdentifier versionedIdentifier;
+
+    @BeforeEach
+    void setUp() {
+        service = new DatamartGeneration(cqlEngine, repository);
+
+        researchStudy = new ResearchStudy().setUrl("http://example.com/study");
+        evidenceVariable = new EvidenceVariable().setUrl("http://example.com/evidence");
+        versionedIdentifier = new VersionedIdentifier()
+                .withId("TestLib")
+                .withVersion("1.0.0");
+    }
+
+    @Test
+    void generateDatamartAddsOneEntryPerSubject() {
+        //CQL configuration
+        when(cqlEngine.getState()).thenReturn(engineState);
+        when(cqlEngine.evaluate(eq(versionedIdentifier), eq(Collections.singleton("MyExpression"))))
+                .thenReturn(new EvaluationResult());
+        when(repository.fhirContext()).thenReturn(FhirContext.forR5());
+
+
+        List<String> subjects = List.of("Patient/123", "Patient/456");
+
+        when(repository.create(any(Parameters.class))).thenReturn(methodOutcome);
+
+        var id = new IdType("Parameters", "999");
+        when(methodOutcome.getId()).thenReturn(id);
+
+        evidenceVariable.addCharacteristic()
+                .getDefinitionByCombination()
+                .addCharacteristic(new EvidenceVariable.EvidenceVariableCharacteristicComponent()
+                        .setDefinitionExpression(new Expression().setExpression("MyExpression")));
+
+        ListResource result = service.generateDatamart(
+                researchStudy,
+                evidenceVariable,
+                subjects,
+                versionedIdentifier
+        );
+
+        assertEquals(2, result.getEntry().size());
+        assertEquals("Parameters/999", result.getEntryFirstRep().getItem().getReference());
+    }
+
+    @Test
+    void generateDatamartWithNullSubjectThrows() {
+        List<String> subjects = Arrays.asList(null, "Patient/123");
+
+        RuntimeException ex = assertThrows(
+                RuntimeException.class,
+                () -> service.generateDatamart(
+                        researchStudy,
+                        evidenceVariable,
+                        subjects,
+                        versionedIdentifier
+                )
+        );
+        assertTrue(ex.getMessage().contains("SubjectId is required"));
+    }
+
+    @Test
+    void evaluateVariableDefinitionMissingExpressionThrows() {
+        ListResource listParams = new ListResource();
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.evaluateVariableDefinition(
+                        listParams,
+                        evidenceVariable,
+                        "Patient",
+                        "123",
+                        versionedIdentifier
+                )
+        );
+        assertTrue(ex.getMessage().contains("DefinitionExpression is missing"));
+    }
 
 	@Test
-	void EvaluateEligiblePatientsAddsAllMembers() {
-		when(evaluationVisitor.visitExpressionDef(any(), any())).thenReturn(true);
-
-		EvidenceVariable.EvidenceVariableCharacteristicComponent characteristic =
-			evidenceVariable.addCharacteristic();
-		characteristic.getDefinitionByCombination()
-			.addCharacteristic(new EvidenceVariable.EvidenceVariableCharacteristicComponent()
-				.setDefinitionExpression(new Expression().setExpression("TestExpression")));
-
-		List<String> subjects = List.of("Patient/123", "Patient/456");
-
-		Group result = cohorteEvaluation.evaluate(researchStudy, evidenceVariable, subjects);
-
-		assertEquals(2, result.getMember().size());
+	void evaluateVariableDefinitionWithNoCharacteristics() {
+		ListResource listParams = new ListResource();
+		IllegalArgumentException ex = assertThrows(
+				IllegalArgumentException.class,
+				() -> service.evaluateVariableDefinition(listParams, evidenceVariable, "Patient", "123", versionedIdentifier)
+		);
+		assertTrue(ex.getMessage().contains("DefinitionExpression is missing"));
 	}
 
-	@Test
-	void EvaluateMixedResultsAddsOnlyMatching() {
-		when(evaluationVisitor.visitExpressionDef(any(), any())).thenReturn(true).thenReturn(false);
+    @Test
+    void evaluateDefinitionExpressionValidExpression() {
+        when(repository.fhirContext()).thenReturn(FhirContext.forR5());
+        when(cqlEngine.evaluate(eq(versionedIdentifier), eq(Collections.singleton("Expr"))))
+                .thenReturn(new EvaluationResult());
 
-		EvidenceVariable.EvidenceVariableCharacteristicComponent characteristic =
-			evidenceVariable.addCharacteristic();
-		characteristic.getDefinitionByCombination()
-			.addCharacteristic(new EvidenceVariable.EvidenceVariableCharacteristicComponent()
-				.setDefinitionExpression(new Expression().setExpression("TestExpression")));
+        Parameters params = service.evaluateDefinitionExpression("Expr", versionedIdentifier);
 
-		List<String> subjects = List.of("Patient/123", "Patient/456");
+        verify(cqlEngine).evaluate(versionedIdentifier, Collections.singleton("Expr"));
+        assertNotNull(params);
+    }
 
-		Group result = cohorteEvaluation.evaluate(researchStudy, evidenceVariable, subjects);
+    @Test
+    void getSubjectTypeAndIdValid() {
+        Pair<String, String> pair = service.getSubjectTypeAndId("Patient/ABC");
+        assertEquals("Patient", pair.getLeft());
+        assertEquals("ABC", pair.getRight());
+    }
 
-		assertEquals(1, result.getMember().size());
-		assertEquals("Patient/" + cohorteEvaluation.pseudonymizeRealId("123"), result.getMemberFirstRep().getEntity().getReference());
-	}
-
-	@Test
-	void EvaluateIneligiblePatientsAddsNone() {
-		when(evaluationVisitor.visitExpressionDef(any(), any())).thenReturn(false);
-		EvidenceVariable.EvidenceVariableCharacteristicComponent characteristic =
-			evidenceVariable.addCharacteristic();
-		characteristic.getDefinitionByCombination()
-			.addCharacteristic(new EvidenceVariable.EvidenceVariableCharacteristicComponent()
-				.setDefinitionExpression(new Expression().setExpression("TestExpression")));
-
-		List<String> subjects = List.of("Patient/123", "Patient/456");
-
-		Group result = cohorteEvaluation.evaluate(researchStudy, evidenceVariable, subjects);
-
-		assertTrue(result.getMember().isEmpty());
-	}
-
-	@Test
-	void EvaluateExpressionValidReturnsBooleanResult() {
-		when(expressionDef.getName()).thenReturn("MyCriteria");
-		when(evaluationVisitor.visitExpressionDef(any(), any())).thenReturn(false);
-
-		Object result = cohorteEvaluation.evaluateDefinitionExpression("MyCriteria");
-
-		assertFalse((Boolean) result);
-	}
+    @Test
+    void getSubjectTypeAndIdInvalidThrows() {
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.getSubjectTypeAndId("NoSlash")
+        );
+        assertTrue(ex.getMessage().contains("SubjectIds must be in the format"));
+    }
 }

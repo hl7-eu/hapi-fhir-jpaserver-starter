@@ -26,7 +26,7 @@ class ResearchStudyUtilsTest {
 	}
 
 	@Test
-	void testGetEvidenceVariableSuccess() {
+	void getEvidenceVariableSuccess() {
 		ResearchStudy study = new ResearchStudy();
 		study.setUrl("Study/1");
 		Extension rootExt = new Extension(ResearchStudyUtils.EXT_URL);
@@ -49,7 +49,7 @@ class ResearchStudyUtilsTest {
 	}
 
 	@Test
-	void testGetEvidenceVariableMissingExtension() {
+	void getEvidenceVariableMissingExtension() {
 		ResearchStudy study = new ResearchStudy();
 		study.setUrl("Study/2");
 		ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class, () ->
@@ -59,7 +59,7 @@ class ResearchStudyUtilsTest {
 	}
 
 	@Test
-	void testGetEvidenceVariableMissingVarExtension() {
+	void getEvidenceVariableMissingVarExtension() {
 		ResearchStudy study = new ResearchStudy();
 		study.setUrl("Study/3");
 		Extension rootExt = new Extension(ResearchStudyUtils.EXT_URL);
@@ -72,7 +72,7 @@ class ResearchStudyUtilsTest {
 	}
 
 	@Test
-	void testGetEvidenceVariableInvalidRefType() {
+	void getEvidenceVariableInvalidRefType() {
 		ResearchStudy study = new ResearchStudy();
 		study.setUrl("Study/4");
 		Extension rootExt = new Extension(ResearchStudyUtils.EXT_URL);
@@ -88,7 +88,7 @@ class ResearchStudyUtilsTest {
 	}
 
 	@Test
-	void testGetEligibleGroupSuccess() {
+	void getEligibleGroupSuccess() {
 		ResearchStudy study = new ResearchStudy();
 		study.setUrl("Study/5");
 		study.getRecruitment().setActualGroup(new Reference("Group/g1"));
@@ -106,7 +106,7 @@ class ResearchStudyUtilsTest {
 	}
 
 	@Test
-	void testGetEligibleGroupNoGroup() {
+	void getEligibleGroupNoGroup() {
 		ResearchStudy study = new ResearchStudy();
 		study.setUrl("Study/6");
 		IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
@@ -116,7 +116,7 @@ class ResearchStudyUtilsTest {
 	}
 
 	@Test
-	void testGetEligibleGroupInvalidRefType() {
+	void getEligibleGroupInvalidRefType() {
 		ResearchStudy study = new ResearchStudy();
 		study.setUrl("Study/7");
 		study.getRecruitment().setActualGroup(new Reference("Patient/p1"));
@@ -128,7 +128,52 @@ class ResearchStudyUtilsTest {
 	}
 
 	@Test
-	void testGetEligibleGroupEmptyMembers() {
+	void getEvidenceVariableNullValueReference() {
+		ResearchStudy study = new ResearchStudy().setUrl("Study/NullRef");
+		Extension rootExt = new Extension(ResearchStudyUtils.EXT_URL);
+		Extension varExt = new Extension(ResearchStudyUtils.VAR_EXT_NAME);
+		rootExt.addExtension(varExt);
+		study.addExtension(rootExt);
+
+		ResourceNotFoundException ex = assertThrows(
+				ResourceNotFoundException.class,
+				() -> ResearchStudyUtils.getEvidenceVariable(study, repository)
+		);
+		assertTrue(ex.getMessage().contains("does not have a valid eligibility reference"));
+	}
+
+	@Test
+	void getEligibleGroupNullReferenceElement() {
+		ResearchStudy study = new ResearchStudy().setUrl("Study/NullGroupRef");
+		Reference badRef = new Reference();
+		study.getRecruitment().setActualGroup(badRef);
+
+		IllegalArgumentException ex = assertThrows(
+				IllegalArgumentException.class,
+				() -> ResearchStudyUtils.getEligibleGroup(study, repository)
+		);
+		System.out.print(ex.getMessage());
+		assertTrue(ex.getMessage().contains("does not have an actualGroup defined in recruitment"));
+	}
+
+	@Test
+	void getSubjectReferencesNullMemberReferenceElement() {
+		Group group = new Group();
+		Group.GroupMemberComponent member = new Group.GroupMemberComponent();
+
+		Reference badRef = new Reference();
+		member.setEntity(badRef);
+		group.addMember(member);
+
+		ResourceNotFoundException ex = assertThrows(
+				ResourceNotFoundException.class,
+				() -> ResearchStudyUtils.getSubjectReferences(group)
+		);
+		assertTrue(ex.getMessage().contains("invalid member reference"));
+	}
+
+	@Test
+	void getEligibleGroupEmptyMembers() {
 		ResearchStudy study = new ResearchStudy();
 		study.setUrl("Study/8");
 		study.getRecruitment().setActualGroup(new Reference("Group/g2"));
@@ -143,7 +188,7 @@ class ResearchStudyUtilsTest {
 	}
 
 	@Test
-	void testGetSubjectReferencesSuccess() {
+	void getSubjectReferencesSuccess() {
 		Group group = new Group();
 		group.setId("g3");
 		Group.GroupMemberComponent member = new Group.GroupMemberComponent();
@@ -159,7 +204,7 @@ class ResearchStudyUtilsTest {
 	}
 
 	@Test
-	void testGetSubjectReferencesEmptyGroup() {
+	void getSubjectReferencesEmptyGroup() {
 		Group group = new Group();
 		group.setId("g4");
 		List<String> refs = ResearchStudyUtils.getSubjectReferences(group);
@@ -167,7 +212,7 @@ class ResearchStudyUtilsTest {
 	}
 
 	@Test
-	void testGetSubjectReferencesInvalidMember() {
+	void getSubjectReferencesInvalidMember() {
 		Group group = new Group();
 		group.setId("g5");
 		Group.GroupMemberComponent member = new Group.GroupMemberComponent();
@@ -181,7 +226,7 @@ class ResearchStudyUtilsTest {
 	}
 
 	@Test
-	void testDesanonmyseEncryptedIdSuccess() {
+	void desanonmyseEncryptedIdSuccess() {
 		try (MockedStatic<CryptoUtils> crypto = Mockito.mockStatic(CryptoUtils.class)) {
 			crypto.when(() -> CryptoUtils.decrypt("enc123")).thenReturn("dec123");
 			String result = ResearchStudyUtils.desanonmyseEncryptedId("enc123");
@@ -190,7 +235,7 @@ class ResearchStudyUtilsTest {
 	}
 
 	@Test
-	void testDesanonmyseEncryptedIdFailure() {
+	void desanonmyseEncryptedIdFailure() {
 		RuntimeException cause = new RuntimeException("fail");
 		try (MockedStatic<CryptoUtils> crypto = Mockito.mockStatic(CryptoUtils.class)) {
 			crypto.when(() -> CryptoUtils.decrypt("bad")).thenThrow(cause);
@@ -202,7 +247,7 @@ class ResearchStudyUtilsTest {
 	}
 
 	@Test
-	void testPseudonymizeRealId() {
+	void pseudonymizeRealId() {
 		try (MockedStatic<CryptoUtils> crypto = Mockito.mockStatic(CryptoUtils.class)) {
 			crypto.when(() -> CryptoUtils.encrypt("id123")).thenReturn("encXYZ");
 			String result = ResearchStudyUtils.pseudonymizeRealId("id123");
