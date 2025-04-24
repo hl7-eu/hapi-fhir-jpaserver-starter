@@ -5,17 +5,22 @@ import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import org.hl7.fhir.convertors.factory.VersionConvertorFactory_40_50;
 import org.hl7.fhir.r5.model.*;
+import org.opencds.cqf.fhir.api.Repository;
+import org.opencds.cqf.fhir.utility.search.Searches;
 
 import java.util.Objects;
 
 public class DatamartExportService {
+
+	private final Repository repository;
 	private final MappingEngine mappingEngine;
 	FhirContext ctx = FhirContext.forR5();
 	String studyRepo = "https://integ.fyrstain.com/r5-data";
 	// OR https://integ.fyrstain.com/mapping ??
 	IGenericClient client = ctx.newRestfulGenericClient(studyRepo);
 
-	public DatamartExportService() {
+	public DatamartExportService(Repository repository) {
+		this.repository = repository;
 		this.mappingEngine = new MappingEngine();
 	}
 
@@ -25,7 +30,7 @@ public class DatamartExportService {
 	 * @param researchStudyUrl      The canonical URL of the ResearchStudy for datamart export.
 	 * @param researchStudyEndpoint The endpoint containing the ResearchStudy, inclusion variables,
 	 *                              and CQL libraries defining research variables.
-	 * @param dataEndpoint          Endpoint to access data referenced by the retrieval operations in the library.
+	 * @param structureMapEndpoint          Endpoint to access data referenced by the retrieval operations in the library.
 	 * @param terminologyEndpoint   (Optional) Endpoint to access terminology (ValueSets, CodeSystems) referenced by the library.
 	 * @param type                  The desired export format (e.g., text/csv, application/json).
 	 * @param structureMapUrl       The canonical URL of the StructureMap to apply for transformation.
@@ -34,27 +39,32 @@ public class DatamartExportService {
 	public Binary exportDatamart(
 		CanonicalType researchStudyUrl,
 		Endpoint researchStudyEndpoint,
-		Endpoint dataEndpoint,
+		Endpoint structureMapEndpoint,
 		Endpoint terminologyEndpoint,
 		String type,
 		CanonicalType structureMapUrl
 	) {
-
-		// Step 2: Retrieve the ResearchStudy
-		String searchUrl = String.format("ResearchStudy?url=%s", researchStudyUrl.getValue());
-		Bundle b = client.search().byUrl(searchUrl).returnBundle(Bundle.class).execute();
+		Repository repo = Repositories.proxy(repository, false, structureMapEndpoint, researchStudyEndpoint, null);
+		Bundle b = repo.search(Bundle.class, ResearchStudy.class, Searches.byCanonical(researchStudyUrl.getCanonical()), null);
 		if (b.getEntry().isEmpty()) {
-			var errorMsg = String.format("Unable to find ResearchStudy with url: %s", researchStudyUrl.getValue());
+			var errorMsg = String.format("Unable to find ResearchStudy with url: %s", researchStudyUrl.getCanonical());
 			throw new ResourceNotFoundException(errorMsg);
 		}
 		ResearchStudy researchStudy = (ResearchStudy) b.getEntry().get(0).getResource();
-
-		// Step 3: Validate the study phase
+		String phase = researchStudy.getPhase().getCode(ResearchStudyUtils.CUSTOM_PHASE_SYSTEM);
 		if (Objects.equals(
 			researchStudy.getPhase().getCode(ResearchStudyUtils.CUSTOM_PHASE_SYSTEM), ResearchStudyUtils.POST_DATAMART)) {
-			var errorMsg = String.format("A datamart is needed before exporting the datamart for ResearchStudy with url: %s", researchStudyUrl);
+			var errorMsg = String.format("A datamart generation is needed before exporting the datamart for ResearchStudy with url: %s", researchStudyUrl);
 			throw new ResourceNotFoundException(errorMsg);
 		}
+
+		Bundle structureMaps = repo.search(Bundle.class, StructureMap.class, Searches.byCanonical(structureMapUrl.getCanonical()), null);
+		if (b.getEntry().isEmpty()) {
+			var errorMsg = String.format("Unable to find ResearchStudy with url: %s", structureMapUrl.getCanonical());
+			throw new ResourceNotFoundException(errorMsg);
+		}
+		repo.invoke("transform", new Parameters(), Binary.class, null);
+		StructureMap structureMap = (StructureMap) b.getEntry().get(0).getResource();
 
 		DatamartExportation datamartExportation = new DatamartExportation(mappingEngine, client);
 

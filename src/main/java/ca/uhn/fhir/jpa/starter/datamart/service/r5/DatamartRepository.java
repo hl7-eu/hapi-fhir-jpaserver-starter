@@ -78,7 +78,7 @@ public class DatamartRepository implements Repository {
 	}
 
 	public <R extends IBaseResource, P extends IBaseParameters> R invoke(String name, P parameters, Class<R> returnType, Map<String, String> headers) {
-		return null;
+		return this.data.invoke(name, parameters, returnType, headers);
 	}
 
 	public <P extends IBaseParameters> MethodOutcome invoke(String name, P parameters, Map<String, String> headers) {

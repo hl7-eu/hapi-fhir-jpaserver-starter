@@ -6,12 +6,15 @@ import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import org.hl7.fhir.r5.model.*;
+import org.opencds.cqf.fhir.utility.repository.RestRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ExportDatamartProvider {
-
+	@Value("${remote.url}")
+	private String remoteUrl;
 	@Autowired
 	private FhirContext context;
 
@@ -41,7 +44,7 @@ public class ExportDatamartProvider {
 		@OperationParam(name = "structureMapUrl") CanonicalType stuctureMapUrl,
 		RequestDetails requestDetails
 	) {
-		DatamartExportService datamartExportService = new DatamartExportService();
+		DatamartExportService datamartExportService = new DatamartExportService(new RestRepository(context.getRestfulClientFactory().newGenericClient(remoteUrl)));
 		return datamartExportService.exportDatamart(
 			researchStudyUrl,
 			researchStudyEndpoint,

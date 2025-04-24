@@ -14,7 +14,7 @@ public class ResearchStudyUtils {
 	public static final String EXT_URL =
 		"https://www.centreantoinelacassagne.org/StructureDefinition/EXT-Datamart";
 	public static final String CUSTOM_PHASE_SYSTEM =
-		"https://www.centreantoinelacassagne.org/CodeSystem/COS-CustomStudyPhases";
+		"https://www.centreantoinelacassagne.org/CodeSystem/COS-ResearchStudyPhase";
 	public static final String INITIAL_PHASE = "initial";
 	public static final String POST_DATAMART = "post-datamart";
 	private static final String VAR_EXT_NAME = "variable";
