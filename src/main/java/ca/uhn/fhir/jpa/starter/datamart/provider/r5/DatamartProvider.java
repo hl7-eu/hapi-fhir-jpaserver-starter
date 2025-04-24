@@ -1,8 +1,6 @@
 package ca.uhn.fhir.jpa.starter.datamart.provider.r5;
 
-import ca.uhn.fhir.context.FhirContext;
-import ca.uhn.fhir.jpa.starter.datamart.service.DatamartEvaluationOptions;
-import ca.uhn.fhir.jpa.starter.datamart.service.r5.DatamartService;
+import ca.uhn.fhir.jpa.starter.datamart.service.r5.DatamartServiceFactory;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
@@ -10,14 +8,14 @@ import org.hl7.fhir.r5.model.CanonicalType;
 import org.hl7.fhir.r5.model.Endpoint;
 import org.hl7.fhir.r5.model.ListResource;
 import org.hl7.fhir.r5.model.ResearchStudy;
-import org.opencds.cqf.fhir.utility.repository.RestRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
-@Component
 public class DatamartProvider {
-	@Autowired
-	private FhirContext context;
+	
+	private final DatamartServiceFactory myFactory;
+
+	public DatamartProvider(DatamartServiceFactory theFactory) {
+		this.myFactory = theFactory;
+	}
 
 	/**
 	 * Provides the implementation of the FHIR operation
@@ -41,7 +39,7 @@ public class DatamartProvider {
 		@OperationParam(name = "terminologyEndpoint") Endpoint terminologyEndpoint,
 		RequestDetails requestDetails
 	) {
-		return new DatamartService(new RestRepository(context.getRestfulClientFactory().newGenericClient(requestDetails.getFhirServerBase())), DatamartEvaluationOptions.defaultOptions()).generateDatamart(
+		return myFactory.create(requestDetails).generateDatamart(
 			researchStudyUrl,
 			researchStudyEndpoint,
 			dataEndpoint,

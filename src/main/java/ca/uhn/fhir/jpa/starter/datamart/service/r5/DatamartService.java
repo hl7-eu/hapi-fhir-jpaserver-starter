@@ -10,7 +10,7 @@ import org.opencds.cqf.fhir.utility.search.Searches;
 
 import java.util.Objects;
 
-public class DatamartService {
+public class DatamartService implements DatamartServiceImpl {
 
 
 	private final Repository repository;
