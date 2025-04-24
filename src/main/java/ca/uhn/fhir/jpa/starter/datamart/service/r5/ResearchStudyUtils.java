@@ -1,5 +1,6 @@
 package ca.uhn.fhir.jpa.starter.datamart.service.r5;
 
+import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import org.hl7.fhir.instance.model.api.IIdType;
 import org.hl7.fhir.r5.model.*;
@@ -17,6 +18,7 @@ public class ResearchStudyUtils {
 	public static final String INITIAL_PHASE = "initial";
 	public static final String POST_DATAMART = "post-datamart";
 	private static final String VAR_EXT_NAME = "variable";
+	private static final String EVAL_EXT_NAME = "evaluation";
 	private static final String ERR_MISSING_EXT =
 		"ResearchStudy %s does not contain extension %s";
 	private static final String ERR_MISSING_VAR_EXT =
@@ -153,5 +155,38 @@ public class ResearchStudyUtils {
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
+	}
+
+	/**
+	 * Retrieves the list of the datamart evaluation defined in the given ResearchStudy.
+	 *
+	 * @param study      The {@link ResearchStudy} used as the basis to export datamart.
+	 * @param repository The FHIR repository for resource lookups.
+	 * @return The List resource representing evaluation parameters.
+	 * @throws IllegalArgumentException if the evaluation extension is missing or the reference is invalid.
+	 */
+	public static ListResource getEvaluationList(ResearchStudy study, IGenericClient repository) {
+
+		Extension ext = study.getExtension().stream()
+			.filter(e -> EXT_URL.equals(e.getUrl()))
+			.findFirst()
+			.orElseThrow(() -> new ResourceNotFoundException(
+				String.format(ERR_MISSING_EXT, study.getUrl(), EXT_URL)));
+
+		Extension evalExt = ext.getExtension().stream()
+			.filter(e -> EVAL_EXT_NAME.equals(e.getUrl()))
+			.findFirst()
+			.orElseThrow(() -> new ResourceNotFoundException(
+				String.format(ERR_MISSING_VAR_EXT, EXT_URL, EVAL_EXT_NAME)));
+
+		Reference listRef = evalExt.getValueReference();
+
+		if (listRef == null || !"List".equals(listRef.getReferenceElement().getResourceType())) {
+			throw new ResourceNotFoundException(
+				String.format(ERR_INVALID_REF_EV, study.getUrl(), listRef.getReference()));
+		}
+
+		ListResource list = repository.read().resource(ListResource.class).withId(new IdType(listRef.getReferenceElement().getIdPart())).execute(); //repository.read(ListResource.class, new IdType(listRef.getReferenceElement().getIdPart()));
+		return list;
 	}
 }
