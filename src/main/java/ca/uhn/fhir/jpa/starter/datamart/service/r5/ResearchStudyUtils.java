@@ -17,7 +17,7 @@ public class ResearchStudyUtils {
 		"https://www.centreantoinelacassagne.org/CodeSystem/COS-CustomStudyPhases";
 	public static final String INITIAL_PHASE = "initial";
 	public static final String POST_DATAMART = "post-datamart";
-	private static final String VAR_EXT_NAME = "variable";
+	public static final String VAR_EXT_NAME = "variable";
 	private static final String ERR_MISSING_EXT =
 		"ResearchStudy %s does not contain extension %s";
 	private static final String ERR_MISSING_VAR_EXT =
@@ -27,7 +27,7 @@ public class ResearchStudyUtils {
 	private static final String ERR_MISSING_GROUP =
 		"ResearchStudy %s does not have an actualGroup defined in recruitment";
 	private static final String ERR_INVALID_REF_Group =
-		"ResearchStudy %s has an invalid actualGroup reference: %s";
+		"ResearchStudy %s has an invalid actualGroup reference";
 	private static final String ERR_NO_MEMBERS =
 		"Group %s contains no members and thus no eligible patients";
 	private static final String ERR_INVALID_MEMBER_REF =

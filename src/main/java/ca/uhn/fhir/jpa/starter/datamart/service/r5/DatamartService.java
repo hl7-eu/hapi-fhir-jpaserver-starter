@@ -4,6 +4,7 @@ import ca.uhn.fhir.jpa.starter.datamart.service.DatamartEvaluationOptions;
 import ca.uhn.fhir.jpa.starter.datamart.service.Repositories;
 import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
+import org.hl7.fhir.r5.model.Binary;
 import org.hl7.fhir.r5.model.*;
 import org.opencds.cqf.fhir.api.Repository;
 import org.opencds.cqf.fhir.utility.search.Searches;
