@@ -11,7 +11,6 @@ import org.opencds.cqf.fhir.cql.engine.parameters.CqlFhirParametersConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.List;
 
 public class DatamartGeneration {
@@ -77,9 +76,8 @@ public class DatamartGeneration {
 			.orElseThrow(() -> new IllegalArgumentException(String.format("DefinitionExpression is missing for %s", evidenceVariable.getUrl())));
 		if (definitionExpression != null && !definitionExpression.isEmpty()) {
 			Parameters result = this.evaluateDefinitionExpression(definitionExpression, id);
-			result.getParameter().add(0, new Parameters.ParametersParameterComponent()
-				.setName("subject")
-				.setValue(new Reference(subjectType + "/" + ResearchStudyUtils.pseudonymizeRealId(subjectId))));
+			result.getParameter("Patient").setResource(null);
+			result.getParameter("Patient").setValue(new Reference(subjectType + "/" + ResearchStudyUtils.pseudonymizeRealId(subjectId)));
 			MethodOutcome outcome = repository.create(result);
 			listParams.addEntry().setItem(new Reference(String.format("%s/%s", outcome.getId().getResourceType(), outcome.getId().getIdPart())));
 
@@ -95,7 +93,7 @@ public class DatamartGeneration {
 	 */
 	public Parameters evaluateDefinitionExpression(String criteriaExpression, VersionedIdentifier id) {
 		CqlFhirParametersConverter cqlFhirParametersConverter = Engines.getCqlFhirParametersConverter(this.repository.fhirContext());
-		return (Parameters) cqlFhirParametersConverter.toFhirParameters(this.cqlEngine.evaluate(id, Collections.singleton(criteriaExpression)));
+		return (Parameters) cqlFhirParametersConverter.toFhirParameters(this.cqlEngine.evaluate(id));
 	}
 
 	/**

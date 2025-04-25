@@ -1,5 +1,6 @@
 package ca.uhn.fhir.jpa.starter.datamart.service.r5;
 
+import ca.uhn.fhir.jpa.starter.datamart.service.CryptoUtils;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import org.hl7.fhir.instance.model.api.IIdType;
 import org.hl7.fhir.r5.model.*;
