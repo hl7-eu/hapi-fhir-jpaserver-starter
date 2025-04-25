@@ -48,10 +48,10 @@ public class DatamartTransformation {
 	}
 
 	/**
-	 * Fetches a Bundle representing the datamart for a given ListResource ID.
+	 * Fetches a Bundle representing the datamart evaluation for a given ListResource ID.
 	 *
-	 * @param listId the ID of the ListResource containing data items
-	 * @return a Bundle with the list and its included items
+	 * @param listId the ID of the ListResource containing datamart evaluation results
+	 * @return a Bundle with the ListResource and included Parameters resources
 	 */
 	public Bundle fetchDataMartBundle(String listId) {
 		Map<String, List<IQueryParameterType>> params = new HashMap<>();
