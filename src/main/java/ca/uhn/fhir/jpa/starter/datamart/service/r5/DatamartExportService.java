@@ -51,7 +51,7 @@ public class DatamartExportService {
 		}
 
 		Bundle structureMaps = repo.search(Bundle.class, StructureMap.class, Searches.byCanonical(structureMapUrl.getCanonical()), null);
-		if (b.getEntry().isEmpty()) {
+		if (structureMaps.getEntry().isEmpty()) {
 			var errorMsg = String.format("Unable to find StructureMap with url: %s", structureMapUrl.getCanonical());
 			throw new ResourceNotFoundException(errorMsg);
 		}
