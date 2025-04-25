@@ -1,6 +1,5 @@
 package ca.uhn.fhir.jpa.starter.datamart.service.r5;
 
-import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import org.hl7.fhir.instance.model.api.IIdType;
 import org.hl7.fhir.r5.model.*;
@@ -161,11 +160,10 @@ public class ResearchStudyUtils {
 	 * Retrieves the list of the datamart evaluation defined in the given ResearchStudy.
 	 *
 	 * @param study      The {@link ResearchStudy} used as the basis to export datamart.
-	 * @param repository The FHIR repository for resource lookups.
 	 * @return The List resource representing evaluation parameters.
 	 * @throws IllegalArgumentException if the evaluation extension is missing or the reference is invalid.
 	 */
-	public static ListResource getEvaluationList(ResearchStudy study, IGenericClient repository) {
+	public static String getEvaluationListId(ResearchStudy study) {
 
 		Extension ext = study.getExtension().stream()
 			.filter(e -> EXT_URL.equals(e.getUrl()))
@@ -185,8 +183,6 @@ public class ResearchStudyUtils {
 			throw new ResourceNotFoundException(
 				String.format(ERR_INVALID_REF_EV, study.getUrl(), listRef.getReference()));
 		}
-
-		ListResource list = repository.read().resource(ListResource.class).withId(new IdType(listRef.getReferenceElement().getIdPart())).execute(); //repository.read(ListResource.class, new IdType(listRef.getReferenceElement().getIdPart()));
-		return list;
+		return listRef.getReferenceElement().getIdPart();
 	}
 }
