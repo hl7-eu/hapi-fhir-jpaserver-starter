@@ -18,7 +18,7 @@ public class ResearchStudyUtils {
 	public static final String INITIAL_PHASE = "initial";
 	public static final String POST_DATAMART = "post-datamart";
 	public static final String VAR_EXT_NAME = "variable";
-	private static final String EVAL_EXT_NAME = "evaluation";
+	public static final String EVAL_EXT_NAME = "evaluation";
 	private static final String ERR_MISSING_EXT =
 		"ResearchStudy %s does not contain extension %s";
 	private static final String ERR_MISSING_VAR_EXT =
