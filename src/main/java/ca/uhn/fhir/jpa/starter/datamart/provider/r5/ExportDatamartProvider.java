@@ -1,22 +1,20 @@
 package ca.uhn.fhir.jpa.starter.datamart.provider.r5;
 
-import ca.uhn.fhir.context.FhirContext;
-import ca.uhn.fhir.jpa.starter.datamart.service.r5.DatamartExportService;
+import ca.uhn.fhir.jpa.starter.datamart.service.r5.DatamartExportServiceFactory;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
-import org.hl7.fhir.r5.model.*;
-import org.opencds.cqf.fhir.utility.repository.RestRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
+import org.hl7.fhir.r5.model.Binary;
+import org.hl7.fhir.r5.model.CanonicalType;
+import org.hl7.fhir.r5.model.Endpoint;
+import org.hl7.fhir.r5.model.ResearchStudy;
 
-@Component
 public class ExportDatamartProvider {
-	@Value("${remote.url}")
-	private String remoteUrl;
-	@Autowired
-	private FhirContext context;
+	private final DatamartExportServiceFactory myFactory;
+
+	public ExportDatamartProvider(DatamartExportServiceFactory theFactory) {
+		this.myFactory = theFactory;
+	}
 
 	/**
 	 * Provides the implementation of the FHIR operation
@@ -44,8 +42,7 @@ public class ExportDatamartProvider {
 		@OperationParam(name = "structureMapUrl") CanonicalType stuctureMapUrl,
 		RequestDetails requestDetails
 	) {
-		DatamartExportService datamartExportService = new DatamartExportService(new RestRepository(context.getRestfulClientFactory().newGenericClient(remoteUrl)));
-		return datamartExportService.exportDatamart(
+		return myFactory.create(requestDetails).exportDatamart(
 			researchStudyUrl,
 			researchStudyEndpoint,
 			dataEndpoint,
