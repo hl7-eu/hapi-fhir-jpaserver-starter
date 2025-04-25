@@ -1,23 +1,25 @@
 package ca.uhn.fhir.jpa.starter.datamart.service.r5;
 
+import ca.uhn.fhir.jpa.starter.datamart.service.DatamartEvaluationOptions;
+import ca.uhn.fhir.jpa.starter.datamart.service.Repositories;
 import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
+import org.hl7.fhir.r5.model.Binary;
 import org.hl7.fhir.r5.model.*;
 import org.opencds.cqf.fhir.api.Repository;
 import org.opencds.cqf.fhir.utility.search.Searches;
 
 import java.util.Objects;
 
-public class DatamartService {
+public class DatamartService implements DatamartServiceImpl {
+
 
 	private final Repository repository;
 	private final DatamartEvaluationOptions settings;
-	//private final MappingEngine mappingEngine;
 
 	public DatamartService(Repository repository, DatamartEvaluationOptions settings) {
 		this.settings = settings;
 		this.repository = Objects.requireNonNull(repository);
-		//this.mappingEngine = new MappingEngine();
 	}
 
 	/**

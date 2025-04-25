@@ -1,5 +1,6 @@
 package ca.uhn.fhir.jpa.starter.datamart.service.r5;
 
+import ca.uhn.fhir.jpa.starter.datamart.service.CryptoUtils;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import org.hl7.fhir.instance.model.api.IIdType;
 import org.hl7.fhir.r5.model.*;
@@ -16,7 +17,7 @@ public class ResearchStudyUtils {
 		"https://www.centreantoinelacassagne.org/CodeSystem/COS-ResearchStudyPhase";
 	public static final String INITIAL_PHASE = "initial";
 	public static final String POST_DATAMART = "post-datamart";
-	private static final String VAR_EXT_NAME = "variable";
+	public static final String VAR_EXT_NAME = "variable";
 	private static final String EVAL_EXT_NAME = "evaluation";
 	private static final String ERR_MISSING_EXT =
 		"ResearchStudy %s does not contain extension %s";
@@ -27,7 +28,7 @@ public class ResearchStudyUtils {
 	private static final String ERR_MISSING_GROUP =
 		"ResearchStudy %s does not have an actualGroup defined in recruitment";
 	private static final String ERR_INVALID_REF_Group =
-		"ResearchStudy %s has an invalid actualGroup reference: %s";
+		"ResearchStudy %s has an invalid actualGroup reference";
 	private static final String ERR_NO_MEMBERS =
 		"Group %s contains no members and thus no eligible patients";
 	private static final String ERR_INVALID_MEMBER_REF =
