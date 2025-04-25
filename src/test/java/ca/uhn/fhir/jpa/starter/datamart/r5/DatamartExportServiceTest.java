@@ -1,127 +1,150 @@
 package ca.uhn.fhir.jpa.starter.datamart.r5;
 
-import ca.uhn.fhir.context.FhirContext;
-import ca.uhn.fhir.jpa.starter.datamart.service.Repositories;
 import ca.uhn.fhir.jpa.starter.datamart.service.r5.DatamartExportService;
 import ca.uhn.fhir.jpa.starter.datamart.service.r5.DatamartTransformation;
+import ca.uhn.fhir.jpa.starter.datamart.service.Repositories;
 import ca.uhn.fhir.jpa.starter.datamart.service.r5.ResearchStudyUtils;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
+import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r5.model.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.MockedConstruction;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.opencds.cqf.fhir.api.Repository;
-
-import java.util.List;
+import org.opencds.cqf.fhir.utility.search.Searches;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+@ExtendWith(MockitoExtension.class)
 class DatamartExportServiceTest {
 
 	@Mock
 	private Repository repository;
-	@Mock
+
 	private DatamartExportService service;
-	@Mock
-	private DatamartTransformation transformation;
-	private Endpoint rsEndpoint;
-	private Endpoint dataEndpoint;
+	private CanonicalType studyUrl;
+	private Endpoint studyEndpoint;
+	private Endpoint mapEndpoint;
 	private Endpoint termEndpoint;
+	private String type;
+	private CanonicalType mapUrl;
 
 	@BeforeEach
 	void setUp() {
 		service = new DatamartExportService(repository);
-		rsEndpoint = new Endpoint();
-		dataEndpoint = new Endpoint();
+		studyUrl = new CanonicalType("http://example.com/study");
+		studyEndpoint = new Endpoint();
+		mapEndpoint = new Endpoint();
 		termEndpoint = new Endpoint();
+		type = "application/json";
+		mapUrl = new CanonicalType("http://example.com/StructureMap/map1");
 	}
 
 	@Test
 	void exportDatamartResearchStudyNotFound() {
-		CanonicalType researchStudyUrl = new CanonicalType("http://example.com/study");
-		when(repository.search(any(), eq(ResearchStudy.class), any(), any()))
-			.thenReturn(new Bundle());
+		try (MockedStatic<Repositories> repo = Mockito.mockStatic(Repositories.class)) {
+			repo.when(() -> Repositories.proxy(any(), anyBoolean(), (IBaseResource) any(), any(), any()))
+				.thenReturn(repository);
+			when(repository.search(eq(Bundle.class), eq(ResearchStudy.class), any(), isNull()))
+				.thenReturn(new Bundle());
 
-		ResourceNotFoundException exception = assertThrows(
-			ResourceNotFoundException.class,
-			() -> service.exportDatamart(researchStudyUrl, null, null, null, "application/json", null)
-		);
+			ResourceNotFoundException ex = assertThrows(
+				ResourceNotFoundException.class,
+				() -> service.exportDatamart(studyUrl, studyEndpoint, mapEndpoint, termEndpoint, type, mapUrl)
+			);
+			assertTrue(ex.getMessage().contains("Unable to find ResearchStudy with url: " + studyUrl.getCanonical()));
+		}
+	}
 
-		assertTrue(exception.getMessage().contains("Unable to find ResearchStudy with url"));
+	@Test
+	void exportDatamartNotPostDatamartPhaseException() {
+		ResearchStudy researchStudy = new ResearchStudy().setUrl(studyUrl.getValue());
+		researchStudy.getPhase().addCoding()
+			.setSystem(ResearchStudyUtils.CUSTOM_PHASE_SYSTEM)
+			.setCode(ResearchStudyUtils.INITIAL_PHASE);
+		Bundle studyBundle = new Bundle();
+		studyBundle.addEntry(new Bundle.BundleEntryComponent().setResource(researchStudy));
+
+		try (MockedStatic<Repositories> repo = Mockito.mockStatic(Repositories.class)) {
+			repo.when(() -> Repositories.proxy(any(), anyBoolean(), any(), (IBaseResource) any(), any()))
+				.thenReturn(repository);
+			when(repository.search(eq(Bundle.class), eq(ResearchStudy.class), any(), isNull()))
+				.thenReturn(studyBundle);
+
+			ResourceNotFoundException ex = assertThrows(
+				ResourceNotFoundException.class,
+				() -> service.exportDatamart(studyUrl, studyEndpoint, mapEndpoint, termEndpoint, type, mapUrl)
+			);
+			assertTrue(ex.getMessage().contains("A datamart generation is needed before exporting the datamart"));
+		}
 	}
 
 	@Test
 	void exportDatamartStructureMapNotFound() {
-		CanonicalType researchStudyUrl = new CanonicalType("http://example.com/study");
-		CanonicalType structureMapUrl = new CanonicalType("http://example.com/structureMap");
+		ResearchStudy researchStudy = new ResearchStudy().setUrl(studyUrl.getValue());
+		researchStudy.getPhase().addCoding()
+			.setSystem(ResearchStudyUtils.CUSTOM_PHASE_SYSTEM)
+			.setCode(ResearchStudyUtils.POST_DATAMART);
+		Bundle studyBundle = new Bundle();
+		studyBundle.addEntry(new Bundle.BundleEntryComponent().setResource(researchStudy));
 
-		Bundle researchStudyBundle = new Bundle();
-		researchStudyBundle.addEntry().setResource(new ResearchStudy());
-		when(repository.search(any(), eq(ResearchStudy.class), any(), any()))
-			.thenReturn(researchStudyBundle);
+		try (MockedStatic<Repositories> reps = Mockito.mockStatic(Repositories.class)) {
+			reps.when(() -> Repositories.proxy(any(), anyBoolean(), (IBaseResource) any(), any(), any()))
+				.thenReturn(repository);
+			when(repository.search(eq(Bundle.class), eq(ResearchStudy.class), any(), isNull()))
+				.thenReturn(studyBundle);
+			when(repository.search(eq(Bundle.class), eq(StructureMap.class), any(), isNull()))
+				.thenReturn(new Bundle());
 
-		when(repository.search(any(), eq(StructureMap.class), any(), any()))
-			.thenReturn(new Bundle());
-
-		ResourceNotFoundException exception = assertThrows(
-			ResourceNotFoundException.class,
-			() -> service.exportDatamart(researchStudyUrl, null, null, null, "application/json", structureMapUrl)
-		);
-
-		assertTrue(exception.getMessage().contains("Unable to find StructureMap with url"));
+			ResourceNotFoundException ex = assertThrows(
+				ResourceNotFoundException.class,
+				() -> service.exportDatamart(studyUrl, studyEndpoint, mapEndpoint, termEndpoint, type, mapUrl)
+			);
+			assertTrue(ex.getMessage().contains("Unable to find StructureMap with url: " + mapUrl.getCanonical()));
+		}
 	}
 
 	@Test
 	void exportDatamartSuccess() {
-		CanonicalType researchStudyUrl = new CanonicalType("http://example.com/study");
-		CanonicalType structureMapUrl = new CanonicalType("http://example.com/structureMap");
-
-		EvidenceVariable evidenceVariable = new EvidenceVariable();
-		evidenceVariable.setId("EV1");
-		evidenceVariable.setUrl(researchStudyUrl.getValue());
-
-		ListResource list = new ListResource();
-		list.setId("List/List123");
-
-		ResearchStudy researchStudy = new ResearchStudy();
-		researchStudy.setPhase(new CodeableConcept(
-			new Coding(ResearchStudyUtils.CUSTOM_PHASE_SYSTEM, ResearchStudyUtils.POST_DATAMART, "Post-Datamart Phase")
-		));
-		researchStudy.setUrl(researchStudyUrl.getValue());
+		ResearchStudy researchStudy = new ResearchStudy().setUrl(studyUrl.getValue());
+		researchStudy.getPhase().addCoding()
+			.setSystem(ResearchStudyUtils.CUSTOM_PHASE_SYSTEM)
+			.setCode(ResearchStudyUtils.POST_DATAMART);
 		researchStudy.addExtension()
 			.setUrl(ResearchStudyUtils.EXT_URL)
 			.addExtension()
 			.setUrl(ResearchStudyUtils.EVAL_EXT_NAME)
 			.setValue(new Reference("List/List123"));
-		researchStudy.getRecruitment().setEligibility(new Reference("EvidenceVariable/EV1"));
-
-		Bundle researchStudyBundle = new Bundle();
-		researchStudyBundle.addEntry().setResource(researchStudy);
-
-		StructureMap structureMap = new StructureMap();
+		Bundle studyBundle = new Bundle();
+		studyBundle.addEntry(new Bundle.BundleEntryComponent().setResource(researchStudy));
+		StructureMap structureMap = new StructureMap().setUrl(mapUrl.getValue());
 		Bundle structureMapBundle = new Bundle();
-		structureMapBundle.addEntry().setResource(structureMap);
+		structureMapBundle.addEntry(new Bundle.BundleEntryComponent().setResource(structureMap));
 
 		try (MockedStatic<Repositories> reps = Mockito.mockStatic(Repositories.class)) {
-			reps.when(() -> Repositories.proxy(eq(repository), anyBoolean(), eq(dataEndpoint), eq(rsEndpoint), eq(termEndpoint)))
-					.thenReturn(repository);
-			when(repository.search(any(), eq(ResearchStudy.class), any(), any()))
-					.thenReturn(researchStudyBundle);
-			when(repository.search(any(), eq(StructureMap.class), any(), any()))
-					.thenReturn(structureMapBundle);
+			reps.when(() -> Repositories.proxy(any(), anyBoolean(), (IBaseResource) any(), any(), any()))
+				.thenReturn(repository);
+			when(repository.search(eq(Bundle.class), eq(ResearchStudy.class), any(), isNull()))
+				.thenReturn(studyBundle);
+			when(repository.search(eq(Bundle.class), eq(StructureMap.class), any(), isNull()))
+				.thenReturn(structureMapBundle);
+			
+			Binary expectedBinary = new Binary();
+			try (MockedConstruction<DatamartTransformation> cons = Mockito.mockConstruction(DatamartTransformation.class,
+				(mockTrans, ctx) -> {
+					when(mockTrans.transform(eq(researchStudy), eq(structureMap))).thenReturn(expectedBinary);
+				})) {
+				Binary result = service.exportDatamart(studyUrl, studyEndpoint, mapEndpoint, termEndpoint, type, mapUrl);
+				assertSame(expectedBinary, result);
+				assertEquals(1, cons.constructed().size());
+			}
 		}
-
-
-		Binary expectedBinary = new Binary();
-		when(transformation.transform(any(), any())).thenReturn(expectedBinary);
-		Binary result = service.exportDatamart(researchStudyUrl, null, null, null, "application/json", structureMapUrl);
-
-		assertNotNull(result);
-		verify(repository, times(1)).search(any(), eq(ResearchStudy.class), any(), any());
-		verify(repository, times(1)).search(any(), eq(StructureMap.class), any(), any());
 	}
 }
