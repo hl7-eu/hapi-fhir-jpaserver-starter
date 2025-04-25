@@ -1,6 +1,6 @@
 package ca.uhn.fhir.jpa.starter.datamart.r5;
 
-import ca.uhn.fhir.jpa.starter.datamart.service.r5.CryptoUtils;
+import ca.uhn.fhir.jpa.starter.datamart.service.CryptoUtils;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
