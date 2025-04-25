@@ -339,3 +339,5 @@ hapi:
 #  protocol: 'http'
 #  schema_management_strategy: CREATE
 #  username: SomeUsername
+remote:
+  url: 'http://localhost:8080/fhir'

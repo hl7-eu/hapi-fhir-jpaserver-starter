@@ -1,20 +1,21 @@
 package ca.uhn.fhir.jpa.starter.datamart.provider.r5;
 
-import ca.uhn.fhir.jpa.starter.datamart.service.r5.DatamartService;
+import ca.uhn.fhir.jpa.starter.datamart.service.r5.DatamartServiceFactory;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
+import ca.uhn.fhir.rest.api.server.RequestDetails;
 import org.hl7.fhir.r5.model.CanonicalType;
 import org.hl7.fhir.r5.model.Endpoint;
 import org.hl7.fhir.r5.model.ListResource;
 import org.hl7.fhir.r5.model.ResearchStudy;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
-@Component
 public class DatamartProvider {
+	
+	private final DatamartServiceFactory myFactory;
 
-	@Autowired
-	private DatamartService datamartService;
+	public DatamartProvider(DatamartServiceFactory theFactory) {
+		this.myFactory = theFactory;
+	}
 
 	/**
 	 * Provides the implementation of the FHIR operation
@@ -35,9 +36,10 @@ public class DatamartProvider {
 		@OperationParam(name = "researchStudyUrl") CanonicalType researchStudyUrl,
 		@OperationParam(name = "researchStudyEndpoint") Endpoint researchStudyEndpoint,
 		@OperationParam(name = "dataEndpoint") Endpoint dataEndpoint,
-		@OperationParam(name = "terminologyEndpoint") Endpoint terminologyEndpoint
+		@OperationParam(name = "terminologyEndpoint") Endpoint terminologyEndpoint,
+		RequestDetails requestDetails
 	) {
-		return datamartService.generateDatamart(
+		return myFactory.create(requestDetails).generateDatamart(
 			researchStudyUrl,
 			researchStudyEndpoint,
 			dataEndpoint,
