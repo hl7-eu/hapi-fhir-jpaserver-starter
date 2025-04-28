@@ -58,6 +58,7 @@ To keep R4- and R5-specific settings separate, we use Spring Boot profiles:
        fhir_version: R5
        custom_provider_classes:
          - ca.uhn.fhir.jpa.starter.datamart.provider.r5.DatamartProvider
+         - ca.uhn.fhir.jpa.starter.datamart.provider.r5.ExportDatamartProvider
 
 ## Running via [Docker Hub](https://hub.docker.com/r/hapiproject/hapi)
 
