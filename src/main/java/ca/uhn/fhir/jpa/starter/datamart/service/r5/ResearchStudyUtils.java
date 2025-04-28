@@ -14,10 +14,11 @@ public class ResearchStudyUtils {
 	public static final String EXT_URL =
 		"https://www.centreantoinelacassagne.org/StructureDefinition/EXT-Datamart";
 	public static final String CUSTOM_PHASE_SYSTEM =
-		"https://www.centreantoinelacassagne.org/CodeSystem/COS-CustomStudyPhases";
+		"https://www.centreantoinelacassagne.org/CodeSystem/COS-ResearchStudyPhase";
 	public static final String INITIAL_PHASE = "initial";
 	public static final String POST_DATAMART = "post-datamart";
 	public static final String VAR_EXT_NAME = "variable";
+	private static final String EVAL_EXT_NAME = "evaluation";
 	private static final String ERR_MISSING_EXT =
 		"ResearchStudy %s does not contain extension %s";
 	private static final String ERR_MISSING_VAR_EXT =
@@ -154,5 +155,35 @@ public class ResearchStudyUtils {
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
+	}
+
+	/**
+	 * Retrieves the list of the datamart evaluation defined in the given ResearchStudy.
+	 *
+	 * @param study      The {@link ResearchStudy} used as the basis to export datamart.
+	 * @return The List resource representing evaluation parameters.
+	 * @throws IllegalArgumentException if the evaluation extension is missing or the reference is invalid.
+	 */
+	public static String getEvaluationListId(ResearchStudy study) {
+
+		Extension ext = study.getExtension().stream()
+			.filter(e -> EXT_URL.equals(e.getUrl()))
+			.findFirst()
+			.orElseThrow(() -> new ResourceNotFoundException(
+				String.format(ERR_MISSING_EXT, study.getUrl(), EXT_URL)));
+
+		Extension evalExt = ext.getExtension().stream()
+			.filter(e -> EVAL_EXT_NAME.equals(e.getUrl()))
+			.findFirst()
+			.orElseThrow(() -> new ResourceNotFoundException(
+				String.format(ERR_MISSING_VAR_EXT, EXT_URL, EVAL_EXT_NAME)));
+
+		Reference listRef = evalExt.getValueReference();
+
+		if (listRef == null || !"List".equals(listRef.getReferenceElement().getResourceType())) {
+			throw new ResourceNotFoundException(
+				String.format(ERR_INVALID_REF_EV, study.getUrl(), listRef.getReference()));
+		}
+		return listRef.getReferenceElement().getIdPart();
 	}
 }

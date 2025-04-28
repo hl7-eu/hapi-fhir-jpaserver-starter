@@ -76,15 +76,4 @@ public class DatamartService implements DatamartServiceImpl {
 
 		repo.update(researchStudy);
 	}
-
-	public Binary exportDatamart(
-		CanonicalType researchStudyUrl,
-		Endpoint researchStudyEndpoint,
-		Endpoint dataEndpoint,
-		Endpoint terminologyEndpoint,
-		String type,
-		CanonicalType stuctureMapUrl
-	) {
-		return new Binary();
-	}
 }

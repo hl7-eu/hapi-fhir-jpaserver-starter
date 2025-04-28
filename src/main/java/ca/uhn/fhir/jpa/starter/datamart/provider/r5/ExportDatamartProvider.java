@@ -1,20 +1,20 @@
 package ca.uhn.fhir.jpa.starter.datamart.provider.r5;
 
-import ca.uhn.fhir.jpa.starter.datamart.service.r5.DatamartService;
+import ca.uhn.fhir.jpa.starter.datamart.service.r5.DatamartExportServiceFactory;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
+import ca.uhn.fhir.rest.api.server.RequestDetails;
 import org.hl7.fhir.r5.model.Binary;
 import org.hl7.fhir.r5.model.CanonicalType;
 import org.hl7.fhir.r5.model.Endpoint;
 import org.hl7.fhir.r5.model.ResearchStudy;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
-@Component
 public class ExportDatamartProvider {
+	private final DatamartExportServiceFactory myFactory;
 
-	@Autowired
-	private DatamartService datamartService;
+	public ExportDatamartProvider(DatamartExportServiceFactory theFactory) {
+		this.myFactory = theFactory;
+	}
 
 	/**
 	 * Provides the implementation of the FHIR operation
@@ -29,7 +29,7 @@ public class ExportDatamartProvider {
 	 * @param dataEndpoint          Endpoint to access data referenced by the retrieval operations in the library.
 	 * @param terminologyEndpoint   (Optional) Endpoint to access terminology (ValueSets, CodeSystems) referenced by the library.
 	 * @param type                  The format of the datamart export (e.g., CSV, JSON, XML).
-	 * @param stuctureMapUrl  	     The canonical URL of the StructureMap to be used for the export.
+	 * @param stuctureMapUrl        The canonical URL of the StructureMap to be used for the export.
 	 * @return A {@link Binary} with the evaluated datamart parameters.
 	 */
 	@Operation(name = "$export-datamart", idempotent = true, type = ResearchStudy.class)
@@ -39,9 +39,10 @@ public class ExportDatamartProvider {
 		@OperationParam(name = "dataEndpoint") Endpoint dataEndpoint,
 		@OperationParam(name = "terminologyEndpoint") Endpoint terminologyEndpoint,
 		@OperationParam(name = "type") String type,
-		@OperationParam(name = "structureMapUrl") CanonicalType stuctureMapUrl
+		@OperationParam(name = "structureMapUrl") CanonicalType stuctureMapUrl,
+		RequestDetails requestDetails
 	) {
-		return datamartService.exportDatamart(
+		return myFactory.create(requestDetails).exportDatamart(
 			researchStudyUrl,
 			researchStudyEndpoint,
 			dataEndpoint,
