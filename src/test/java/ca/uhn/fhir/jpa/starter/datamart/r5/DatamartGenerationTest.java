@@ -65,36 +65,34 @@ class DatamartGenerationTest {
         when(repository.fhirContext()).thenReturn(FhirContext.forR5());
 
 		 Parameters baseParams = new Parameters();
-		 baseParams.addParameter().setName("Patient");
-		 when(converter.toFhirParameters(any())).thenReturn(baseParams);
-		 // Stub static converter retrieval
+		 baseParams.addParameter().setName("Patient").setResource(new Patient());
+
 		 try (var enginesStatic = mockStatic(Engines.class)) {
 			 enginesStatic.when(() -> Engines.getCqlFhirParametersConverter(any()))
 				 .thenReturn(converter);
+			 when(converter.toFhirParameters(any())).thenReturn(baseParams);
+			 List<String> subjects = List.of("Patient/123", "Patient/456");
+
+			 when(repository.create(any(Parameters.class))).thenReturn(methodOutcome);
+
+			 var id = new IdType("Parameters", "999");
+			 when(methodOutcome.getId()).thenReturn(id);
+
+			 evidenceVariable.addCharacteristic()
+				 .getDefinitionByCombination()
+				 .addCharacteristic(new EvidenceVariable.EvidenceVariableCharacteristicComponent()
+					 .setDefinitionExpression(new Expression().setExpression("MyExpression")));
+
+			 ListResource result = service.generateDatamart(
+				 researchStudy,
+				 evidenceVariable,
+				 subjects,
+				 versionedIdentifier
+			 );
+
+			 assertEquals(2, result.getEntry().size());
+			 assertEquals("Parameters/999", result.getEntryFirstRep().getItem().getReference());
 		 }
-
-
-        List<String> subjects = List.of("Patient/123", "Patient/456");
-
-        when(repository.create(any(Parameters.class))).thenReturn(methodOutcome);
-
-        var id = new IdType("Parameters", "999");
-        when(methodOutcome.getId()).thenReturn(id);
-
-        evidenceVariable.addCharacteristic()
-                .getDefinitionByCombination()
-                .addCharacteristic(new EvidenceVariable.EvidenceVariableCharacteristicComponent()
-                        .setDefinitionExpression(new Expression().setExpression("MyExpression")));
-
-        ListResource result = service.generateDatamart(
-                researchStudy,
-                evidenceVariable,
-                subjects,
-                versionedIdentifier
-        );
-
-        assertEquals(2, result.getEntry().size());
-        assertEquals("Parameters/999", result.getEntryFirstRep().getItem().getReference());
     }
 
     @Test
