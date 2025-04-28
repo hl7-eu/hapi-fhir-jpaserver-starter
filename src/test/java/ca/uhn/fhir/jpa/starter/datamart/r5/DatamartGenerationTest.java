@@ -15,16 +15,15 @@ import org.opencds.cqf.cql.engine.execution.CqlEngine;
 import org.opencds.cqf.cql.engine.execution.EvaluationResult;
 import org.opencds.cqf.cql.engine.execution.State;
 import org.opencds.cqf.fhir.api.Repository;
+import org.opencds.cqf.fhir.cql.Engines;
+import org.opencds.cqf.fhir.cql.engine.parameters.CqlFhirParametersConverter;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class DatamartGenerationTest {
@@ -37,6 +36,8 @@ class DatamartGenerationTest {
     private MethodOutcome methodOutcome;
     @Mock
     private State engineState;
+	 @Mock
+	 private CqlFhirParametersConverter converter;
 
 
     private DatamartGeneration service;
@@ -59,9 +60,18 @@ class DatamartGenerationTest {
     void generateDatamartAddsOneEntryPerSubject() {
         //CQL configuration
         when(cqlEngine.getState()).thenReturn(engineState);
-        when(cqlEngine.evaluate(eq(versionedIdentifier), eq(Collections.singleton("MyExpression"))))
+        when(cqlEngine.evaluate(eq(versionedIdentifier)))
                 .thenReturn(new EvaluationResult());
         when(repository.fhirContext()).thenReturn(FhirContext.forR5());
+
+		 Parameters baseParams = new Parameters();
+		 baseParams.addParameter().setName("Patient");
+		 when(converter.toFhirParameters(any())).thenReturn(baseParams);
+		 // Stub static converter retrieval
+		 try (var enginesStatic = mockStatic(Engines.class)) {
+			 enginesStatic.when(() -> Engines.getCqlFhirParametersConverter(any()))
+				 .thenReturn(converter);
+		 }
 
 
         List<String> subjects = List.of("Patient/123", "Patient/456");
@@ -132,12 +142,12 @@ class DatamartGenerationTest {
     @Test
     void evaluateDefinitionExpressionValidExpression() {
         when(repository.fhirContext()).thenReturn(FhirContext.forR5());
-        when(cqlEngine.evaluate(eq(versionedIdentifier), eq(Collections.singleton("Expr"))))
+        when(cqlEngine.evaluate(eq(versionedIdentifier)))
                 .thenReturn(new EvaluationResult());
 
         Parameters params = service.evaluateDefinitionExpression("Expr", versionedIdentifier);
 
-        verify(cqlEngine).evaluate(versionedIdentifier, Collections.singleton("Expr"));
+        verify(cqlEngine).evaluate(versionedIdentifier);
         assertNotNull(params);
     }
 
