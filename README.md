@@ -27,17 +27,24 @@ In order to use this sample, you should have:
  - Docker, as the entire project can be built using multistage docker (with both JDK and maven wrapped in docker) or used directly from [Docker Hub](https://hub.docker.com/r/hapiproject/hapi)
 
 ## New Features  
-- **Datamart Generation**: `$generate-datamart` operation to creates a patient datamart by executing CQL logic against a `ResearchStudy` resource.
 
+- **Datamart Generation**: `$generate-datamart` operation to creates a patient datamart by executing CQL logic against a `ResearchStudy` resource.
 - **Endpoint**:  
   ```http
-POST [base]/ResearchStudy/$generate-datamart
+  POST [base]/ResearchStudy/$generate-datamart
+  ```
 
 - **Datamart Export**: `$export-datamart` operation to export a patient datamart by executing a mapping by a StructureMap of the evaluation parameters.
-
 - **Endpoint**:
   ```http
-POST [base]/ResearchStudy/$export-datamart
+  POST [base]/ResearchStudy/$export-datamart
+  ```
+
+- **Cohorting**: `$cohorting` operation to generate patient cohorts using CQL logic.
+- **Endpoint**:
+  ```http
+  POST [base]/ResearchStudy/$cohorting
+  ```
 
 ## Managing FHIR Version via Spring Profiles
 
@@ -48,9 +55,11 @@ To keep R4- and R5-specific settings separate, we use Spring Boot profiles:
    ```text
    profiles/
      ├─ application-datamart-r4.yaml
-     └─ application-datamart-r5.yaml
+     ├─ application-datamart-r5.yaml
+     ├─ application-cohort-r4.yaml
+     └─ application-cohort-r5.yaml
 
-2. **Per-version settings application-datamart-r5.yaml**
+2. **Per-version settings application-cohort-r5.yaml and application-datamart-r5.yaml**
 
    ```yaml
    hapi:
@@ -59,6 +68,7 @@ To keep R4- and R5-specific settings separate, we use Spring Boot profiles:
        custom_provider_classes:
          - ca.uhn.fhir.jpa.starter.datamart.provider.r5.DatamartProvider
          - ca.uhn.fhir.jpa.starter.datamart.provider.r5.ExportDatamartProvider
+         - ca.uhn.fhir.jpa.starter.cohort.provider.r5.CohorteProvider
 
 ## Running via [Docker Hub](https://hub.docker.com/r/hapiproject/hapi)
 
@@ -169,13 +179,19 @@ docker run -p 8090:8080 -v ./profiles:/profiles -e "--spring.config.additional.l
 
 This way spring will look for the configuration for the profile you defined (here it will search for **application-datamart-r5.yaml**).
 
-You can also use several profiles using coma-separated list of profiles in the variable value :
+Or you can do this for the configuration for the cohorting profile you defined (here it will search for **application-cohort-r5.yaml**).
 
 ```
---e "--spring.profiles.active=datamart-r5,other"
+docker run -p 8090:8080 -v ./profiles:/profiles -e "--spring.config.additional.location=/profiles" -e "--spring.profiles.active=cohort-r5" hapiproject/hapi:latest
 ```
 
-If you want to use this with docker-compose, here is an example file using a single external profile and a postgres container for database : 
+You can also use several profiles using coma-separated list of profiles in the variable value:
+
+```
+--e "--spring.profiles.active=datamart-r5,cohort-r5,other"
+```
+
+If you want to use this with docker-compose, here is an example file using a single external profile and a postgres container for database: 
 
 ```yaml
 version: "3.8"
@@ -190,7 +206,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: "admin"
       SPRING_DATASOURCE_DRIVERCLASSNAME: "org.postgresql.Driver"
       SPRING_CONFIG_ADDITIONAL_LOCATION: "/profiles/"
-      SPRING_PROFILES_ACTIVE: "datamart-r5"
+      SPRING_PROFILES_ACTIVE: "datamart-r5, cohort-r5"
     volumes:
       - ./profiles:/profiles
     ports:
@@ -209,11 +225,11 @@ volumes:
   hapi-fhir-postgres:
 ```
 
-You can retrieve the environment variables : 
+You can retrieve the environment variables: 
 
 ```
 SPRING_CONFIG_ADDITIONAL_LOCATION: "/profiles/"
-SPRING_PROFILES_ACTIVE: "datamart-r5"
+SPRING_PROFILES_ACTIVE: "datamart-r5,cohort-r5"
 ```
 
 as well as the volume : 
