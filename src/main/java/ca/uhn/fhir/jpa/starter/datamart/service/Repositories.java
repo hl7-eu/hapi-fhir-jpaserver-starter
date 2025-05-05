@@ -13,9 +13,7 @@ import org.opencds.cqf.fhir.utility.matcher.ResourceMatcherDSTU3;
 import org.opencds.cqf.fhir.utility.matcher.ResourceMatcherR4;
 import org.opencds.cqf.fhir.utility.matcher.ResourceMatcherR5;
 import org.opencds.cqf.fhir.utility.repository.RestRepository;
-import org.springframework.stereotype.Component;
 
-@Component
 public class Repositories {
 
 	private Repositories() {
