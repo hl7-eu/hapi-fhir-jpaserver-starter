@@ -5,18 +5,20 @@ import org.hl7.elm.r1.ExpressionDef;
 import org.hl7.fhir.r5.model.*;
 import org.opencds.cqf.cql.engine.execution.CqlEngine;
 import org.opencds.cqf.cql.engine.execution.Libraries;
+import org.opencds.cqf.fhir.api.Repository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 
 import java.util.List;
 
 public class CohorteEvaluation {
 	private static final Logger logger = LoggerFactory.getLogger(CohorteEvaluation.class);
 	private final CqlEngine cqlEngine;
+	private final Repository repository;
 
-	public CohorteEvaluation(CqlEngine cqlEngine) {
+	public CohorteEvaluation(CqlEngine cqlEngine, Repository repository) {
 		this.cqlEngine = cqlEngine;
+		this.repository = repository;
 	}
 
 	/**
@@ -68,8 +70,10 @@ public class CohorteEvaluation {
 		if (definitionExpression != null && !definitionExpression.isEmpty()) {
 			Object result = this.evaluateDefinitionExpression(definitionExpression);
 			if (result instanceof Boolean) {
+
 				if (Boolean.TRUE.equals(result)) {
-					group.addMember().setEntity(new Reference(String.format("%s/%s", subjectType, pseudonymizeRealId(subjectId))));
+					Identifier patientIdent = repository.read(Patient.class, new IdType(subjectId)).getIdentifier().get(0);
+					group.addMember().setEntity(new Reference().setIdentifier(pseudonymizeIdentifier(patientIdent)));
 				}
 			}
 		}
@@ -78,12 +82,15 @@ public class CohorteEvaluation {
 	/**
 	 * Pseudonymizes a real subject identifier by appending a configured encryption key, then computing the SHA-256 hash.
 	 *
-	 * @param realId The original subject identifier.
+	 * @param original The original subject identifier.
 	 * @return The pseudonymized identifier.
 	 */
-	public String pseudonymizeRealId(String realId) {
+	public Identifier pseudonymizeIdentifier(Identifier original) {
 		try {
-			return CryptoUtils.encrypt(realId);
+			String encrypted = CryptoUtils.encrypt(original.getValue());
+			Identifier copy = original.copy();
+			copy.setValue(encrypted);
+			return copy;
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}

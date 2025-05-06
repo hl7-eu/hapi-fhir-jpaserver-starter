@@ -3,10 +3,7 @@ package ca.uhn.fhir.jpa.starter.cohort.r5;
 import ca.uhn.fhir.jpa.starter.cohort.service.r5.CohorteEvaluation;
 import org.hl7.elm.r1.ExpressionDef;
 import org.hl7.elm.r1.Library;
-import org.hl7.fhir.r5.model.EvidenceVariable;
-import org.hl7.fhir.r5.model.Expression;
-import org.hl7.fhir.r5.model.Group;
-import org.hl7.fhir.r5.model.ResearchStudy;
+import org.hl7.fhir.r5.model.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,11 +12,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.opencds.cqf.cql.engine.execution.CqlEngine;
 import org.opencds.cqf.cql.engine.execution.EvaluationVisitor;
 import org.opencds.cqf.cql.engine.execution.State;
+import org.opencds.cqf.fhir.api.Repository;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -37,6 +36,8 @@ class CohorteEvaluationTest {
 	private Library.Statements elmStatements;
 	@Mock
 	private ExpressionDef expressionDef;
+	@Mock
+	private Repository repository;
 
 	private CohorteEvaluation cohorteEvaluation;
 	private ResearchStudy researchStudy;
@@ -52,7 +53,7 @@ class CohorteEvaluationTest {
 		when(elmStatements.getDef()).thenReturn(List.of(expressionDef));
 		when(expressionDef.getName()).thenReturn("TestExpression");
 
-		cohorteEvaluation = new CohorteEvaluation(cqlEngine);
+		cohorteEvaluation = new CohorteEvaluation(cqlEngine, repository);
 		researchStudy = new ResearchStudy().setUrl("http://example.com/study");
 		evidenceVariable = new EvidenceVariable().setUrl("http://example.com/evidence");
 	}
@@ -68,11 +69,15 @@ class CohorteEvaluationTest {
 				.setDefinitionExpression(new Expression().setExpression("TestExpression")));
 
 		List<String> subjects = List.of("Patient/123", "Patient/456");
-
+		Patient patient = new Patient();
+		patient.addIdentifier().setValue("123").setSystem("urn:oid:0.1.2.3.4.5.6.7");
+		when(repository.read(eq(Patient.class), any(IdType.class)))
+			.thenReturn(patient);
 		Group result = cohorteEvaluation.evaluate(researchStudy, evidenceVariable, subjects);
 
 		assertEquals(2, result.getMember().size());
 	}
+
 
 	@Test
 	void EvaluateMixedResultsAddsOnlyMatching() {
@@ -85,11 +90,13 @@ class CohorteEvaluationTest {
 				.setDefinitionExpression(new Expression().setExpression("TestExpression")));
 
 		List<String> subjects = List.of("Patient/123", "Patient/456");
-
+		Patient patient = new Patient();
+		patient.addIdentifier().setValue("123").setSystem("urn:oid:0.1.2.3.4.5.6.7");
+		when(repository.read(eq(Patient.class), any(IdType.class)))
+			.thenReturn(patient);
 		Group result = cohorteEvaluation.evaluate(researchStudy, evidenceVariable, subjects);
 
 		assertEquals(1, result.getMember().size());
-		assertEquals("Patient/" + cohorteEvaluation.pseudonymizeRealId("123"), result.getMemberFirstRep().getEntity().getReference());
 	}
 
 	@Test

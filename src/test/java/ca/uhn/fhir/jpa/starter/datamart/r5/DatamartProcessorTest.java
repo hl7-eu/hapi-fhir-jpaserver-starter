@@ -93,7 +93,7 @@ class DatamartProcessorTest {
         try (MockedStatic<ResearchStudyUtils> utils = Mockito.mockStatic(ResearchStudyUtils.class)) {
             utils.when(() -> ResearchStudyUtils.getEligibleGroup(study, repository)).thenReturn(group);
             utils.when(() -> ResearchStudyUtils.getEvidenceVariable(study, repository)).thenReturn(variable);
-            utils.when(() -> ResearchStudyUtils.getSubjectReferences(group)).thenReturn(subjects);
+            utils.when(() -> ResearchStudyUtils.getSubjectReferences(group, repository)).thenReturn(subjects);
 
             Bundle bundle = new Bundle();
             bundle.addEntry(new Bundle.BundleEntryComponent()

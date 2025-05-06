@@ -1,13 +1,14 @@
 package ca.uhn.fhir.jpa.starter.datamart.service.r5;
 
 import ca.uhn.fhir.jpa.starter.datamart.service.CryptoUtils;
+import ca.uhn.fhir.model.api.IQueryParameterType;
+import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import org.hl7.fhir.instance.model.api.IIdType;
 import org.hl7.fhir.r5.model.*;
 import org.opencds.cqf.fhir.api.Repository;
 
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class ResearchStudyUtils {
@@ -107,25 +108,27 @@ public class ResearchStudyUtils {
 	 * @return A list of strings in the format "Patient/{decryptedId}".
 	 * @throws ResourceNotFoundException if any member reference is invalid or not a Patient.
 	 */
-	public static List<String> getSubjectReferences(Group group) {
+	public static List<String> getSubjectReferences(Group group, Repository repository) {
 		if (group.getMember().isEmpty()) {
 			return List.of();
 		}
+
 		return group.getMember().stream()
 			.map(Group.GroupMemberComponent::getEntity)
 			.filter(Objects::nonNull)
-			.map(ref -> {
-				IIdType idElement = ref.getReferenceElement();
-				if (idElement == null || !"Patient".equals(idElement.getResourceType())) {
-					throw new ResourceNotFoundException(
-						String.format(ERR_INVALID_MEMBER_REF,
-							group.getIdElement().getValue(),
-							ref.getReference())
-					);
-				}
-				return idElement.getResourceType() + "/" + desanonmyseEncryptedId(idElement.getIdPart());
-			})
+			.map(entity -> referenceFromIdentifier(entity, repository))
 			.collect(Collectors.toList());
+	}
+
+	private static String referenceFromIdentifier(Reference entity, Repository repository) {
+		Identifier id = desanonmyseIdentifier(entity.getIdentifier());
+		Map<String, List<IQueryParameterType>> params = new HashMap<>();
+		params.put("identifier",
+			Collections.singletonList(new TokenParam(id.getSystem(), id.getValue())));
+		Bundle b = repository.search(Bundle.class, Patient.class, params, null);
+		Patient patient = (Patient) b.getEntry().get(0).getResource();
+		IIdType pid = patient.getIdElement();
+		return pid.getResourceType() + "/" + pid.getIdPart();
 	}
 
 	/**
@@ -135,9 +138,12 @@ public class ResearchStudyUtils {
 	 * @return The decrypted (original) identifier.
 	 * @throws RuntimeException if decryption fails.
 	 */
-	public static String desanonmyseEncryptedId(String encryptedId) {
+	public static Identifier desanonmyseIdentifier(Identifier encryptedId) {
 		try {
-			return CryptoUtils.decrypt(encryptedId);
+			String original = CryptoUtils.decrypt(encryptedId.getValue());
+			Identifier decrypted = encryptedId.copy();
+			decrypted.setValue(original);
+			return decrypted;
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
@@ -146,12 +152,15 @@ public class ResearchStudyUtils {
 	/**
 	 * Pseudonymizes a real subject identifier by appending a configured encryption key, then computing the SHA-256 hash.
 	 *
-	 * @param realId The original subject identifier.
+	 * @param original The original subject identifier.
 	 * @return The pseudonymized identifier.
 	 */
-	public static String pseudonymizeRealId(String realId) {
+	public static Identifier pseudonymizeIdentifier(Identifier original) {
 		try {
-			return CryptoUtils.encrypt(realId);
+			String encrypted = ca.uhn.fhir.jpa.starter.cohort.service.r5.CryptoUtils.encrypt(original.getValue());
+			Identifier copy = original.copy();
+			copy.setValue(encrypted);
+			return copy;
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
@@ -160,7 +169,7 @@ public class ResearchStudyUtils {
 	/**
 	 * Retrieves the list of the datamart evaluation defined in the given ResearchStudy.
 	 *
-	 * @param study      The {@link ResearchStudy} used as the basis to export datamart.
+	 * @param study The {@link ResearchStudy} used as the basis to export datamart.
 	 * @return The List resource representing evaluation parameters.
 	 * @throws IllegalArgumentException if the evaluation extension is missing or the reference is invalid.
 	 */

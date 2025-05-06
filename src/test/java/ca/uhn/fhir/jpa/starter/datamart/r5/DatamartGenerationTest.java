@@ -56,6 +56,7 @@ class DatamartGenerationTest {
                 .withVersion("1.0.0");
     }
 
+    // TODO: update the test to align with the new modification of using Identifier instead of reference
     @Test
     void generateDatamartAddsOneEntryPerSubject() {
         //CQL configuration
@@ -111,6 +112,7 @@ class DatamartGenerationTest {
         assertTrue(ex.getMessage().contains("SubjectId is required"));
     }
 
+    // TODO: update the test to align with the new modification of using Identifier instead of reference
     @Test
     void evaluateVariableDefinitionMissingExpressionThrows() {
         ListResource listParams = new ListResource();
@@ -127,6 +129,7 @@ class DatamartGenerationTest {
         assertTrue(ex.getMessage().contains("DefinitionExpression is missing"));
     }
 
+    // TODO: update the test to align with the new modification of using Identifier instead of reference
 	@Test
 	void evaluateVariableDefinitionWithNoCharacteristics() {
 		ListResource listParams = new ListResource();
@@ -143,7 +146,7 @@ class DatamartGenerationTest {
         when(cqlEngine.evaluate(eq(versionedIdentifier)))
                 .thenReturn(new EvaluationResult());
 
-        Parameters params = service.evaluateDefinitionExpression("Expr", versionedIdentifier);
+        Parameters params = service.evaluateDefinitionExpression(versionedIdentifier);
 
         verify(cqlEngine).evaluate(versionedIdentifier);
         assertNotNull(params);

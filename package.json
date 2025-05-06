@@ -1,6 +1,6 @@
 {
   "name": "cohorting-datamart-engine",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "HAPI FHIR with cohorting and datamart engine features",
   "main": "/app/main.war",
   "scripts": {
