@@ -74,18 +74,18 @@ public class DatamartGeneration {
 			.map(EvidenceVariable.EvidenceVariableCharacteristicComponent::getDefinitionExpression)
 			.map(Expression::getExpression)
 			.orElseThrow(() -> new IllegalArgumentException(String.format("DefinitionExpression is missing for %s", evidenceVariable.getUrl())));*/
-			Parameters result = this.evaluateDefinitionExpression(id);
-			Patient patient = (Patient) result.getParameter("Patient").getResource();
-			result.getParameter("Patient").setResource(null);
-			result.getParameter("Patient").setValue(ResearchStudyUtils.pseudonymizeIdentifier(patient.getIdentifier().get(0)));
-			MethodOutcome outcome = repository.create(result);
-			listParams.addEntry().setItem(new Reference(String.format("%s/%s", outcome.getId().getResourceType(), outcome.getId().getIdPart())));
+		Parameters result = this.evaluateDefinitionExpression(id);
+		Patient patient = (Patient) result.getParameter("Patient").getResource();
+		result.getParameter("Patient").setResource(null);
+		result.getParameter("Patient").setValue(ResearchStudyUtils.pseudonymizeIdentifier(patient.getIdentifier().get(0)));
+		MethodOutcome outcome = repository.create(result);
+		listParams.addEntry().setItem(new Reference(String.format("%s/%s", outcome.getId().getResourceType(), outcome.getId().getIdPart())));
 	}
 
 	/**
 	 * Evaluates the given CQL expression using the CQL evaluation engine.
 	 *
-	 * @param id                 The id of the CQL library containing the expression.
+	 * @param id The id of the CQL library containing the expression.
 	 * @return A FHIR Parameters resource containing the results of the evaluation.
 	 */
 	public Parameters evaluateDefinitionExpression(VersionedIdentifier id) {

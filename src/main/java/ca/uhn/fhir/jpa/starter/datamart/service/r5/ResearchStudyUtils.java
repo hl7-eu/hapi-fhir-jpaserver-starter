@@ -7,7 +7,6 @@ import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import org.hl7.fhir.instance.model.api.IIdType;
 import org.hl7.fhir.r5.model.*;
 import org.opencds.cqf.fhir.api.Repository;
-import org.opencds.cqf.fhir.utility.search.Searches;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -170,7 +169,7 @@ public class ResearchStudyUtils {
 	/**
 	 * Retrieves the list of the datamart evaluation defined in the given ResearchStudy.
 	 *
-	 * @param study      The {@link ResearchStudy} used as the basis to export datamart.
+	 * @param study The {@link ResearchStudy} used as the basis to export datamart.
 	 * @return The List resource representing evaluation parameters.
 	 * @throws IllegalArgumentException if the evaluation extension is missing or the reference is invalid.
 	 */

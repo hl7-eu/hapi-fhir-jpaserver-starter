@@ -30,10 +30,10 @@ public class CohorteProcessor {
 	 *
 	 * @param researchStudy The {@link ResearchStudy} used as the basis for cohorting.
 	 * @return The updated {@link Group} containing eligible subjects based on the cohort evaluation.
-	 * @throws IllegalArgumentException if the {@link ResearchStudy} does not have a valid eligibility variable or if the
-	 *                                  associated {@link EvidenceVariable} lacks a valid library reference.
+	 * @throws IllegalArgumentException  if the {@link ResearchStudy} does not have a valid eligibility variable or if the
+	 *                                   associated {@link EvidenceVariable} lacks a valid library reference.
 	 * @throws ResourceNotFoundException if no {@link Library} resource can be found using the extracted library URL.
-	 * @throws IllegalStateException if the CQL/ELM library cannot be resolved or loaded due to a CQL include exception.
+	 * @throws IllegalStateException     if the CQL/ELM library cannot be resolved or loaded due to a CQL include exception.
 	 */
 	public Group cohorting(
 		ResearchStudy researchStudy
@@ -83,7 +83,7 @@ public class CohorteProcessor {
 		context.getState().init(lib.getLibrary());
 		var subjects =
 			subjectProvider.getSubjects(repository, (List<String>) null).collect(Collectors.toList());
-		CohorteEvaluation cohorteEvaluation = new CohorteEvaluation(context,repository);
+		CohorteEvaluation cohorteEvaluation = new CohorteEvaluation(context, repository);
 		return cohorteEvaluation.evaluate(researchStudy, evidenceVariable, subjects);
 	}
 }
