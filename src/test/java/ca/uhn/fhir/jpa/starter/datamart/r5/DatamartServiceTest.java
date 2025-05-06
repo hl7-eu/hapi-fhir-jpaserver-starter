@@ -87,6 +87,7 @@ class DatamartServiceTest {
 		}
 	}
 
+	// TODO: update the test to align with the new modification of using Identifier instead of reference
 	@Test
 	void generateDatamartSuccessfulFlow() {
 		ResearchStudy rs = new ResearchStudy();

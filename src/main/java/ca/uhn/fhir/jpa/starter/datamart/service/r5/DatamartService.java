@@ -51,7 +51,7 @@ public class DatamartService implements DatamartServiceImpl {
 		}
 		DatamartProcessor datamartProcessor = new DatamartProcessor(repo, settings);
 		ListResource list = datamartProcessor.generateDatamart(researchStudy);
-		updateResearchStudyWithList(repo, researchStudy, repo.create(list));
+		updateResearchStudyWithList(repo, researchStudy, list);
 		return list;
 	}
 
@@ -61,18 +61,25 @@ public class DatamartService implements DatamartServiceImpl {
 	 *
 	 * @param repo          The repository to use for updates.
 	 * @param researchStudy The ResearchStudy to modify.
-	 * @param outcome       The MethodOutcome from creating the ListResource.
+	 * @param listResource       The ListResource.
 	 */
-	public void updateResearchStudyWithList(Repository repo, ResearchStudy researchStudy, MethodOutcome outcome) {
-		researchStudy.getExtensionByUrl(ResearchStudyUtils.EXT_URL).addExtension()
-			.setUrl("evaluation")
-			.setValue(new Reference(String.format("%s/%s", outcome.getId().getResourceType(), outcome.getId().getIdPart())));
-		CodeableConcept phase = new CodeableConcept();
-		phase.addCoding()
-			.setCode(ResearchStudyUtils.POST_DATAMART)
-			.setSystem(ResearchStudyUtils.CUSTOM_PHASE_SYSTEM);
-		researchStudy.setPhase(phase);
+	public void updateResearchStudyWithList(Repository repo, ResearchStudy researchStudy, ListResource listResource) {
+		Reference listReference = researchStudy.getExtensionByUrl(ResearchStudyUtils.EXT_URL).getExtensionByUrl("evaluation").getValueReference();
+		if (listReference != null) {
+			listResource.setId(listReference.getReferenceElement().getIdPart());
+			repo.update(listResource);
+		} else {
+			MethodOutcome outcome = repo.create(listResource);
+			researchStudy.getExtensionByUrl(ResearchStudyUtils.EXT_URL).addExtension()
+					.setUrl("evaluation")
+					.setValue(new Reference(String.format("%s/%s", outcome.getId().getResourceType(), outcome.getId().getIdPart())));
+			CodeableConcept phase = new CodeableConcept();
+			phase.addCoding()
+					.setCode(ResearchStudyUtils.POST_DATAMART)
+					.setSystem(ResearchStudyUtils.CUSTOM_PHASE_SYSTEM);
+			researchStudy.setPhase(phase);
 
-		repo.update(researchStudy);
+			repo.update(researchStudy);
+		}
 	}
 }

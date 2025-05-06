@@ -62,7 +62,7 @@ public class DatamartProcessor {
 				e);
 		}
 		context.getState().init(lib.getLibrary());
-		var subject = ResearchStudyUtils.getSubjectReferences(eligibleGroup);
+		var subject = ResearchStudyUtils.getSubjectReferences(eligibleGroup, repository);
 		DatamartGeneration datamartGeneration = new DatamartGeneration(context, repository);
 		return datamartGeneration.generateDatamart(researchStudy, evidenceVariable, subject, id);
 	}

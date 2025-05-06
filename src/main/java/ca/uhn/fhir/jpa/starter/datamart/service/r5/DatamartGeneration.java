@@ -66,32 +66,29 @@ public class DatamartGeneration {
 	 * @throws IllegalArgumentException if the EvidenceVariable is missing the definition expression.
 	 */
 	public void evaluateVariableDefinition(ListResource listParams, EvidenceVariable evidenceVariable, String subjectType, String subjectId, VersionedIdentifier id) {
-		String definitionExpression = evidenceVariable.getCharacteristic().stream().findFirst()
+		/*String definitionExpression = evidenceVariable.getCharacteristic().stream().findFirst()
 			.map(EvidenceVariable.EvidenceVariableCharacteristicComponent::getDefinitionByCombination)
 			.map(EvidenceVariable.EvidenceVariableCharacteristicDefinitionByCombinationComponent::getCharacteristic)
 			.filter(list -> !list.isEmpty())
 			.map(list -> list.get(0))
 			.map(EvidenceVariable.EvidenceVariableCharacteristicComponent::getDefinitionExpression)
 			.map(Expression::getExpression)
-			.orElseThrow(() -> new IllegalArgumentException(String.format("DefinitionExpression is missing for %s", evidenceVariable.getUrl())));
-		if (definitionExpression != null && !definitionExpression.isEmpty()) {
-			Parameters result = this.evaluateDefinitionExpression(definitionExpression, id);
+			.orElseThrow(() -> new IllegalArgumentException(String.format("DefinitionExpression is missing for %s", evidenceVariable.getUrl())));*/
+			Parameters result = this.evaluateDefinitionExpression(id);
+			Patient patient = (Patient) result.getParameter("Patient").getResource();
 			result.getParameter("Patient").setResource(null);
-			result.getParameter("Patient").setValue(new Reference(subjectType + "/" + ResearchStudyUtils.pseudonymizeRealId(subjectId)));
+			result.getParameter("Patient").setValue(ResearchStudyUtils.pseudonymizeIdentifier(patient.getIdentifier().get(0)));
 			MethodOutcome outcome = repository.create(result);
 			listParams.addEntry().setItem(new Reference(String.format("%s/%s", outcome.getId().getResourceType(), outcome.getId().getIdPart())));
-
-		}
 	}
 
 	/**
 	 * Evaluates the given CQL expression using the CQL evaluation engine.
 	 *
-	 * @param criteriaExpression The CQL expression to evaluate.
 	 * @param id                 The id of the CQL library containing the expression.
 	 * @return A FHIR Parameters resource containing the results of the evaluation.
 	 */
-	public Parameters evaluateDefinitionExpression(String criteriaExpression, VersionedIdentifier id) {
+	public Parameters evaluateDefinitionExpression(VersionedIdentifier id) {
 		CqlFhirParametersConverter cqlFhirParametersConverter = Engines.getCqlFhirParametersConverter(this.repository.fhirContext());
 		return (Parameters) cqlFhirParametersConverter.toFhirParameters(this.cqlEngine.evaluate(id));
 	}

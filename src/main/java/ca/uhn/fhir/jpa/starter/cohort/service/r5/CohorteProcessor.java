@@ -83,7 +83,7 @@ public class CohorteProcessor {
 		context.getState().init(lib.getLibrary());
 		var subjects =
 			subjectProvider.getSubjects(repository, (List<String>) null).collect(Collectors.toList());
-		CohorteEvaluation cohorteEvaluation = new CohorteEvaluation(context);
+		CohorteEvaluation cohorteEvaluation = new CohorteEvaluation(context,repository);
 		return cohorteEvaluation.evaluate(researchStudy, evidenceVariable, subjects);
 	}
 }
