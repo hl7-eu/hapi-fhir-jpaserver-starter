@@ -64,9 +64,9 @@ public class DatamartService implements DatamartServiceImpl {
      * @param listResource  The ListResource.
      */
     public void updateResearchStudyWithList(Repository repo, ResearchStudy researchStudy, ListResource listResource) {
-        Reference listReference = researchStudy.getExtensionByUrl(ResearchStudyUtils.EXT_URL).getExtensionByUrl("evaluation").getValueReference();
+        Extension listReference = researchStudy.getExtensionByUrl(ResearchStudyUtils.EXT_URL).getExtensionByUrl("evaluation");
         if (listReference != null) {
-            listResource.setId(listReference.getReferenceElement().getIdPart());
+            listResource.setId(listReference.getValueReference().getReferenceElement().getIdPart());
             repo.update(listResource);
         } else {
             MethodOutcome outcome = repo.create(listResource);
