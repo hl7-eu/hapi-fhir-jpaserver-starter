@@ -17,18 +17,4 @@ public class StudyEligibilityCheckConfig {
 		retVal.add(new StudyEligibilityCheckService());
 		return retVal;
 	}
-
-	@Bean
-	public ServletRegistrationBean<CdsHooksServlet> cdsHooksServlet() {
-		ServletRegistrationBean<CdsHooksServlet> reg = new ServletRegistrationBean<>(
-				new CdsHooksServlet(), "/cds-services/*"
-		);
-		reg.setName("cdsServices");
-		// Si nécessaire, vous pouvez passer en init-param le nom de votre @Configuration
-		reg.addInitParameter(
-				"springContextConfigClass",
-				"com.exemple.cds.CdsHooksConfig"
-		);
-		return reg;
-	}
 }
