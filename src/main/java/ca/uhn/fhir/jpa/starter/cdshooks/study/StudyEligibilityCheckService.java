@@ -1,10 +1,15 @@
 package ca.uhn.fhir.jpa.starter.cdshooks.study;
 
+import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.rest.api.server.cdshooks.CdsServiceRequestContextJson;
 import ca.uhn.fhir.rest.api.server.cdshooks.CdsServiceRequestJson;
 import ca.uhn.hapi.fhir.cdshooks.api.CdsService;
 import ca.uhn.hapi.fhir.cdshooks.api.CdsServiceFeedback;
+import ca.uhn.hapi.fhir.cdshooks.api.CdsServicePrefetch;
 import ca.uhn.hapi.fhir.cdshooks.api.json.*;
+import org.hl7.fhir.r5.model.Bundle;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -12,9 +17,18 @@ import java.util.UUID;
 
 @Component
 public class StudyEligibilityCheckService {
+	private static final Logger LOG = LoggerFactory.getLogger(StudyEligibilityCheckService.class);
+
 	@CdsService(
-		value = "research-eligibility-check", hook = "patient-view", title = "Research study eligibility verification.", description = "Evaluate the inclusion criteria defined in a CQL Library.", prefetch = {})
+		value = "research-eligibility-check",
+		hook = "patient-view",
+		title = "Research study eligibility verification.",
+		description = "Evaluate the inclusion criteria defined in a CQL Library.",
+		prefetch = {
+			@CdsServicePrefetch(value = "patientData", query = "Patient/{{context.patientId}}/$everything")
+		})
 	public CdsServiceResponseJson exampleService(CdsServiceRequestJson theCdsRequest) {
+		Bundle patientData = (Bundle) theCdsRequest.getPrefetch("patientData");
 		CdsServiceResponseJson response = new CdsServiceResponseJson();
 		CdsServiceResponseCardJson card = new CdsServiceResponseCardJson();
 
@@ -26,26 +40,58 @@ public class StudyEligibilityCheckService {
 		String inclusionExpression = context.getString("inclusionExpression");
 		String contentServer = context.getString("contentServer");
 		String terminologyServer = context.getString("terminologyServer");
-		String CQLEngineServer = context.getString("CQLEngineServer");
+		String cqlEngineServer = context.getString("CQLEngineServer");
 
-		RemoteCqlClient cqlClient = new RemoteCqlClient(CQLEngineServer);
-		boolean isEligible = cqlClient.evaluateInclusionExpression(patientId, libraryId, inclusionExpression, contentServer, fhirServer, terminologyServer);
+		RemoteCqlClient cqlClient = new RemoteCqlClient(FhirContext.forR5(), cqlEngineServer);
+		try {
+			boolean isEligible;
+			if (patientData != null) {
+				isEligible = cqlClient.evaluateInclusionExpression(
+					patientData,
+					libraryId,
+					inclusionExpression,
+					contentServer,
+					fhirServer,
+					terminologyServer
+				);
+			} else {
+				isEligible = cqlClient.evaluateInclusionExpression(
+					patientId,
+					libraryId,
+					inclusionExpression,
+					contentServer,
+					fhirServer,
+					terminologyServer
+				);
+			}
 
-		if (isEligible) {
-			card.setIndicator(CdsServiceIndicatorEnum.INFO);
-			card.setSummary("Patient eligible for clinical study " + (studyId != null ? studyId : ""));
-			card.setDetail("Patient meets all inclusion criteria and has no exclusion conditions. Consider including this patient in the study.");
-		} else {
-			card.setSummary("Patient not eligible for study " + (studyId != null ? studyId : ""));
-			card.setIndicator(CdsServiceIndicatorEnum.WARNING);
-			card.setDetail("Patient does not meet all inclusion criteria or has an exclusion condition.");
+
+			if (isEligible) {
+				card.setIndicator(CdsServiceIndicatorEnum.INFO);
+				card.setSummary("Patient eligible for clinical study " + studyId);
+				card.setDetail("Patient meets all inclusion criteria and has no exclusion conditions. Consider including this patient in the study.");
+			} else {
+				card.setIndicator(CdsServiceIndicatorEnum.WARNING);
+				card.setSummary("Patient not eligible for study " + studyId);
+				card.setDetail("Patient does not meet all inclusion criteria or has an exclusion condition.");
+			}
+
+		} catch (Exception e) {
+			// Log the error with context for debugging
+			LOG.error("Error evaluating CQL expression for patient {} and study {}: {}", patientId, studyId, e.getMessage(), e);
+
+			// Build an error card
+			card.setIndicator(CdsServiceIndicatorEnum.CRITICAL);
+			card.setSummary("Error evaluating eligibility");
+			card.setDetail("An unexpected error occurred while evaluating eligibility.");
 		}
-		response.addCard(card);
-
+		// Set source information
 		CdsServiceResponseCardSourceJson source = new CdsServiceResponseCardSourceJson();
 		source.setLabel("Research Eligibility CDS Service");
 		source.setUrl("https://www.centreantoinelacassagne.org");
 		card.setSource(source);
+
+		response.addCard(card);
 		return response;
 	}
 
