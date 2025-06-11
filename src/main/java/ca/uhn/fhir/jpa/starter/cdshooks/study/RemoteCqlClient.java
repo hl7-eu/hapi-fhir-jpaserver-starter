@@ -1,4 +1,4 @@
-package ca.uhn.fhir.jpa.starter.cdshooks.cohorting;
+package ca.uhn.fhir.jpa.starter.cdshooks.study;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
@@ -7,9 +7,7 @@ import org.hl7.fhir.r4.model.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
 
-@Service
 public class RemoteCqlClient {
 	private static final Logger logger = LoggerFactory.getLogger(RemoteCqlClient.class);
 	private final IGenericClient client;

@@ -1,15 +1,17 @@
-package ca.uhn.fhir.jpa.starter.cdshooks.cohorting;
+package ca.uhn.fhir.jpa.starter.cdshooks.study;
 
 import ca.uhn.fhir.rest.api.server.cdshooks.CdsServiceRequestContextJson;
 import ca.uhn.fhir.rest.api.server.cdshooks.CdsServiceRequestJson;
 import ca.uhn.hapi.fhir.cdshooks.api.CdsService;
 import ca.uhn.hapi.fhir.cdshooks.api.CdsServiceFeedback;
 import ca.uhn.hapi.fhir.cdshooks.api.json.*;
+import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.UUID;
 
-public class CohortingCdsService {
+@Component
+public class StudyEligibilityCheckService {
 	@CdsService(
 		value = "research-eligibility-check", hook = "patient-view", title = "Research study eligibility verification.", description = "Evaluate the inclusion criteria defined in a CQL Library.", prefetch = {})
 	public CdsServiceResponseJson exampleService(CdsServiceRequestJson theCdsRequest) {
