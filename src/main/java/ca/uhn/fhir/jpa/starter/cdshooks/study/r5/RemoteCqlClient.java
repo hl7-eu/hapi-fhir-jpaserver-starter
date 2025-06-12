@@ -1,4 +1,4 @@
-package ca.uhn.fhir.jpa.starter.cdshooks.study;
+package ca.uhn.fhir.jpa.starter.cdshooks.study.r5;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.rest.client.api.IGenericClient;

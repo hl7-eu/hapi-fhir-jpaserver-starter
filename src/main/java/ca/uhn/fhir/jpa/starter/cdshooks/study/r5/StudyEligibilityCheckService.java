@@ -1,4 +1,4 @@
-package ca.uhn.fhir.jpa.starter.cdshooks.study;
+package ca.uhn.fhir.jpa.starter.cdshooks.study.r5;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.rest.api.server.cdshooks.CdsServiceRequestContextJson;
@@ -10,15 +10,29 @@ import ca.uhn.hapi.fhir.cdshooks.api.json.*;
 import org.hl7.fhir.r5.model.Bundle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.UUID;
 
 @Component
+@Profile("R5")
 public class StudyEligibilityCheckService {
 	private static final Logger LOG = LoggerFactory.getLogger(StudyEligibilityCheckService.class);
 
+	private RemoteCqlClient remoteCqlClient;
+
+	public void setRemoteCqlClient(RemoteCqlClient remoteCqlClient) {
+		this.remoteCqlClient = remoteCqlClient;
+	}
+
+	/**
+	 * Main CDS Hooks operation invoked on the patient-view hook.
+	 *
+	 * @param theCdsRequest JSON wrapper of the CDS service request, including context and prefetched data
+	 * @return CdsServiceResponseJson containing a single card with eligibility information
+	 */
 	@CdsService(
 		value = "research-eligibility-check",
 		hook = "patient-view",
@@ -42,7 +56,9 @@ public class StudyEligibilityCheckService {
 		String terminologyServer = context.getString("terminologyServer");
 		String cqlEngineServer = context.getString("CQLEngineServer");
 
-		RemoteCqlClient cqlClient = new RemoteCqlClient(FhirContext.forR5(), cqlEngineServer);
+		RemoteCqlClient cqlClient = this.remoteCqlClient != null
+			? this.remoteCqlClient
+			: new RemoteCqlClient(FhirContext.forR5(), cqlEngineServer);
 		try {
 			boolean isEligible;
 			if (patientData != null) {
