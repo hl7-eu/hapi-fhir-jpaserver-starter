@@ -1,6 +1,7 @@
 package ca.uhn.fhir.jpa.starter.cdshooks;
 
 import ca.uhn.fhir.context.FhirVersionEnum;
+import ca.uhn.fhir.jpa.starter.cdshooks.study.StudyEligibilityCdsHooksContextBooter;
 import ca.uhn.fhir.jpa.starter.cr.CrCommonConfig;
 import ca.uhn.fhir.jpa.starter.cr.CrConfigCondition;
 import ca.uhn.fhir.jpa.starter.cr.CrProperties;
@@ -69,7 +70,7 @@ public class StarterCdsHooksConfig {
 	@Bean
 	public CdsHooksContextBooter cdsHooksContextBooter() {
 		// ourLog.info("No Spring Context provided.  Assuming all CDS Services will be registered dynamically.");
-		return new CdsHooksContextBooter();
+		return new StudyEligibilityCdsHooksContextBooter();
 	}
 
 	public static class CdsHooksDaoAuthorizationSvc implements ICdsHooksDaoAuthorizationSvc {
