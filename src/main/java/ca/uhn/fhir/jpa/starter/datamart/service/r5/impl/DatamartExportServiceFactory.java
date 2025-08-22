@@ -1,4 +1,4 @@
-package ca.uhn.fhir.jpa.starter.datamart.service.r5;
+package ca.uhn.fhir.jpa.starter.datamart.service.r5.impl;
 
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 

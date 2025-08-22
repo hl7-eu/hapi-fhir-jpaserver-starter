@@ -1,6 +1,6 @@
 package ca.uhn.fhir.jpa.starter.datamart.provider.r5;
 
-import ca.uhn.fhir.jpa.starter.datamart.service.r5.DatamartExportServiceFactory;
+import ca.uhn.fhir.jpa.starter.datamart.service.r5.impl.DatamartExportServiceFactory;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.api.server.RequestDetails;

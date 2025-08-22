@@ -1,4 +1,4 @@
-package ca.uhn.fhir.jpa.starter.datamart.service.r5;
+package ca.uhn.fhir.jpa.starter.datamart.service.r5.impl;
 
 import org.hl7.fhir.r5.model.Binary;
 import org.hl7.fhir.r5.model.CanonicalType;
