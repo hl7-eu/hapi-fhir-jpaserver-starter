@@ -19,6 +19,11 @@ public class DatamartGeneration {
 	private static final Logger logger = LoggerFactory.getLogger(DatamartGeneration.class);
 
 	private static final String EXT_CQF_LIBRARY = "http://hl7.org/fhir/StructureDefinition/cqf-library";
+	private static final String EXT_EV_PARAM = "https://www.centreantoinelacassagne.org/StructureDefinition/EXT-EVParametrisation";
+
+	// Sub-extensions inside the container:
+	private static final String SUB_NAME = "name";
+	private static final String SUB_VALUE = "value";
 
 	private final RemoteCqlClient cqlEngine;
 	private final Repository repository;
@@ -91,10 +96,11 @@ public class DatamartGeneration {
 		}
 		for (EvidenceVariable.EvidenceVariableCharacteristicComponent characteristic : evidenceVariable.getCharacteristic()) {
 			if (characteristic.hasDefinitionExpression()) {
-				String expressionName = safe(characteristic.getDefinitionExpression().getExpression());
+				Expression expr = characteristic.getDefinitionExpression();
+				String expressionName = safe(expr.getExpression());
 				if (expressionName != null) {
 					String libId = LibraryUtils.resolveLibraryId(repository, evidenceVariable, fallbackLibId);
-					expression.add(new ExpressionInfo(expressionName, libId));
+					expression.add(new ExpressionInfo(expressionName, libId, retrieveExpressionParameters(expr)));
 				}
 			}
 			if (characteristic.hasDefinitionByCombination()) {
@@ -141,11 +147,11 @@ public class DatamartGeneration {
 															String fallbackLibId,
 															List<ExpressionInfo> expressions) {
 		if (characteristic.hasDefinitionExpression()) {
-			Expression expr = characteristic.getDefinitionExpression();
-			String exprName = safe(expr.getExpression());
+			Expression expression = characteristic.getDefinitionExpression();
+			String exprName = safe(expression.getExpression());
 			if (exprName != null) {
 				String libId = LibraryUtils.resolveLibraryId(repository, contextEv, fallbackLibId);
-				expressions.add(new ExpressionInfo(exprName, libId));
+				expressions.add(new ExpressionInfo(exprName, libId, retrieveExpressionParameters(expression)));
 			}
 		}
 		if (characteristic.hasDefinitionByCombination()) {
@@ -201,15 +207,16 @@ public class DatamartGeneration {
 		if (expressions.isEmpty()) {
 			return null;
 		}
-		Map<String, List<ExpressionInfo>> expressionByLib = new HashMap<>();
+		Map<String, ExpressionInfo> expressionByLib = new HashMap<>();
 		for (ExpressionInfo expression : expressions) {
-			expressionByLib.computeIfAbsent(expression.libraryId, k -> new ArrayList<>()).add(expression);
+			expressionByLib.computeIfAbsent(expression.libraryId, k -> expression);
 		}
-		for (Map.Entry<String, List<ExpressionInfo>> entry : expressionByLib.entrySet()) {
+		for (Map.Entry<String, ExpressionInfo> entry : expressionByLib.entrySet()) {
 			String libId = entry.getKey();
-			List<ExpressionInfo> expression = entry.getValue();
+			ExpressionInfo expression = entry.getValue();
 
 			Parameters callParams = baseParams.copy();
+			callParams.addParameter().setName("parameters").setResource(expression.parameters);
 			callParams.getParameter().removeIf(p -> "subject".equals(p.getName()));
 			callParams.addParameter().setName("subject").setValue(new StringType(subjectId));
 
@@ -223,16 +230,14 @@ public class DatamartGeneration {
 				}
 			}
 
-			for (ExpressionInfo def : expression) {
-				Parameters.ParametersParameterComponent resComp = resultByName.get(def.expressionName);
-				Parameters.ParametersParameterComponent param = params.addParameter();
-				param.setName(def.expressionName);
-				if (resComp != null) {
-					if (resComp.hasValue()) {
-						param.setValue(resComp.getValue());
-					} else if (resComp.getResource() != null) {
-						param.setResource(resComp.getResource());
-					}
+			Parameters.ParametersParameterComponent resComp = resultByName.get(expression.expressionName);
+			Parameters.ParametersParameterComponent param = params.addParameter();
+			param.setName(expression.expressionName);
+			if (resComp != null) {
+				if (resComp.hasValue()) {
+					param.setValue(resComp.getValue());
+				} else if (resComp.getResource() != null) {
+					param.setResource(resComp.getResource());
 				}
 			}
 		}
@@ -253,6 +258,26 @@ public class DatamartGeneration {
 		}
 		String[] parts = subjectId.split("/");
 		return Pair.of(parts[0], parts[1]);
+	}
+
+	/**
+	 * Collects expression parameterization from {@value EXT_EV_PARAM} extensions and attaches
+	 * them under a nested {@code parameters} resource in the evaluation parameters.
+	 *
+	 * @param expression the Expression potentially carrying parameterization extensions
+	 * @return new Parameters containing a nested {@code Parameters} resource under parameter name {@code "parameters"}
+	 */
+	private Parameters retrieveExpressionParameters(Expression expression) {
+		Parameters expressionParam = new Parameters();
+
+		for (Extension extension : expression.getExtension()) {
+			if (extension.getUrl().equals(EXT_EV_PARAM)) {
+				String name = ((StringType) extension.getExtensionByUrl(SUB_NAME).getValue()).getValue();
+				DataType value = extension.getExtensionByUrl(SUB_VALUE).getValue();
+				expressionParam.addParameter(name, value);
+			}
+		}
+		return expressionParam;
 	}
 
 	/**

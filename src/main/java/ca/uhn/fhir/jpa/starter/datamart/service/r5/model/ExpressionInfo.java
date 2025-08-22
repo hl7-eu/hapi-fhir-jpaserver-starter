@@ -1,5 +1,7 @@
 package ca.uhn.fhir.jpa.starter.datamart.service.r5.model;
 
+import org.hl7.fhir.r5.model.Parameters;
+
 /**
  * Value object that captures an expression name and the library id where it is defined.
  * Equality and hashCode are based on both fields, enabling duplicate filtering.
@@ -7,10 +9,12 @@ package ca.uhn.fhir.jpa.starter.datamart.service.r5.model;
 public class ExpressionInfo {
 	public String expressionName;
 	public String libraryId;
+	public Parameters parameters;
 
-	public ExpressionInfo(String expressionName, String libraryId) {
+	public ExpressionInfo(String expressionName, String libraryId, Parameters parameters) {
 		this.expressionName = expressionName;
 		this.libraryId = libraryId;
+		this.parameters = parameters;
 	}
 
 	@Override
