@@ -2,8 +2,8 @@ package ca.uhn.fhir.jpa.starter.datamart.r5;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.jpa.starter.datamart.service.Repositories;
-import ca.uhn.fhir.jpa.starter.datamart.service.r5.DatamartTransformation;
-import ca.uhn.fhir.jpa.starter.datamart.service.r5.ResearchStudyUtils;
+import ca.uhn.fhir.jpa.starter.datamart.service.r5.service.DatamartTransformation;
+import ca.uhn.fhir.jpa.starter.datamart.service.r5.utils.ResearchStudyUtils;
 import ca.uhn.fhir.model.api.IQueryParameterType;
 import ca.uhn.fhir.rest.param.StringParam;
 import org.hl7.fhir.instance.model.api.IBaseResource;

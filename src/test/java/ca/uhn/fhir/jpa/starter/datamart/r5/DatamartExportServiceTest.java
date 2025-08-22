@@ -1,9 +1,9 @@
 package ca.uhn.fhir.jpa.starter.datamart.r5;
 
 import ca.uhn.fhir.jpa.starter.datamart.service.Repositories;
-import ca.uhn.fhir.jpa.starter.datamart.service.r5.DatamartExportService;
-import ca.uhn.fhir.jpa.starter.datamart.service.r5.DatamartTransformation;
-import ca.uhn.fhir.jpa.starter.datamart.service.r5.ResearchStudyUtils;
+import ca.uhn.fhir.jpa.starter.datamart.service.r5.service.DatamartExportService;
+import ca.uhn.fhir.jpa.starter.datamart.service.r5.service.DatamartTransformation;
+import ca.uhn.fhir.jpa.starter.datamart.service.r5.utils.ResearchStudyUtils;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r5.model.*;
