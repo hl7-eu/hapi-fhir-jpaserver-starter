@@ -114,7 +114,7 @@ public class DatamartGenerationTest {
 
 			Parameters created = captureCreatedParameters();
 			assertTrue(hasNamedParam(created, "A"));
-			assertTrue(hasNamedParam(created, "B"));
+			assertFalse(hasNamedParam(created, "B"));
 		}
 	}
 

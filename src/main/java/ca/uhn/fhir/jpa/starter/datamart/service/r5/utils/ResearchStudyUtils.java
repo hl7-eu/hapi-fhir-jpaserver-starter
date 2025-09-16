@@ -79,15 +79,16 @@ public class ResearchStudyUtils {
 	 * @throws ResourceNotFoundException if the group contains no members.
 	 */
 	public static Group getEligibleGroup(ResearchStudy study, Repository repository) {
-		if (!study.getRecruitment().hasActualGroup()) {
+		Reference groupRef = study.getRecruitment().getActualGroup();
+		if (groupRef == null ||
+			groupRef.getReferenceElement() == null ||
+			groupRef.getReferenceElement().getIdPart() == null ||
+			groupRef.getReferenceElement().getIdPart().isEmpty()) {
 			throw new IllegalArgumentException(
 				String.format(ERR_MISSING_GROUP, study.getUrl()));
 		}
 
-		Reference groupRef = study.getRecruitment().getActualGroup();
-		if (groupRef == null ||
-			groupRef.getReferenceElement() == null ||
-			!groupRef.getReferenceElement().getResourceType().equals("Group")) {
+		if (!"Group".equals(groupRef.getReferenceElement().getResourceType())) {
 			throw new IllegalArgumentException(
 				String.format(ERR_INVALID_REF_Group, study.getUrl())
 			);
@@ -96,7 +97,8 @@ public class ResearchStudyUtils {
 
 		if (group.getMember().isEmpty()) {
 			throw new ResourceNotFoundException(
-				String.format(ERR_NO_MEMBERS, groupRef.getId()));
+				String.format(ERR_NO_MEMBERS, groupRef.getId())
+			);
 		}
 		return group;
 	}
@@ -113,12 +115,33 @@ public class ResearchStudyUtils {
 			return List.of();
 		}
 
-		return group.getMember().stream()
-			.map(Group.GroupMemberComponent::getEntity)
-			.filter(Objects::nonNull)
-			.map(entity -> referenceFromIdentifier(entity, repository))
-			.filter(Objects::nonNull)
-			.collect(Collectors.toList());
+		List<String> refs = new ArrayList<>();
+		for (Group.GroupMemberComponent member : group.getMember()) {
+			Reference entity = member.getEntity();
+			if (entity == null) {
+				throw new ResourceNotFoundException(
+					String.format(ERR_INVALID_MEMBER_REF, group.getId())
+				);
+			}
+			if (entity.getReferenceElement() != null &&
+				entity.getReferenceElement().getResourceType() != null &&
+				!"Patient".equals(entity.getReferenceElement().getResourceType())) {
+				throw new ResourceNotFoundException(
+					String.format(ERR_INVALID_MEMBER_REF, group.getId())
+				);
+			}
+			Identifier identifier = entity.getIdentifier();
+			if (identifier == null || identifier.getValue() == null || identifier.getValue().isEmpty()) {
+				throw new ResourceNotFoundException(
+					String.format(ERR_INVALID_MEMBER_REF, group.getId())
+				);
+			}
+			String ref = referenceFromIdentifier(entity, repository);
+			if (ref != null) {
+				refs.add(ref);
+			}
+		}
+		return refs;
 	}
 
 	private static String referenceFromIdentifier(Reference entity, Repository repository) {
@@ -131,8 +154,7 @@ public class ResearchStudyUtils {
 			return null;
 		}
 		Patient patient = (Patient) b.getEntry().get(0).getResource();
-		IIdType pid = patient.getIdElement();
-		return pid.getResourceType() + "/" + pid.getIdPart();
+		return "Patient/" + patient.getId();
 	}
 
 	/**
