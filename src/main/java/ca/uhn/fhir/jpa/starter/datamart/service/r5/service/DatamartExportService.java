@@ -55,11 +55,6 @@ public class DatamartExportService implements DatamartExportServiceImpl {
 			throw new ResourceNotFoundException(errorMsg);
 		}
 		ResearchStudy researchStudy = (ResearchStudy) b.getEntry().get(0).getResource();
-		if (!Objects.equals(
-			researchStudy.getPhase().getCode(ResearchStudyUtils.CUSTOM_PHASE_SYSTEM), ResearchStudyUtils.POST_DATAMART)) {
-			var errorMsg = String.format("A datamart generation is needed before exporting the datamart for ResearchStudy with url: %s", researchStudyUrl);
-			throw new ResourceNotFoundException(errorMsg);
-		}
 
 		switch (ExportType.fromCode(type)) {
 			case CSV:
