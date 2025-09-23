@@ -58,7 +58,7 @@ public class DatamartTransformation {
 	public Bundle fetchDataMartBundle(String listId) {
 		Map<String, List<IQueryParameterType>> params = new HashMap<>();
 		params.put("_count", Collections.singletonList(new NumberParam(1000)));
-		params.put("_has:List:itembis:_id", Collections.singletonList(new TokenParam(listId)));
+		params.put("_has:List:item:_id", Collections.singletonList(new TokenParam(listId)));
 		return repository.search(Bundle.class, Parameters.class, params, null);
 	}
 

@@ -18,7 +18,7 @@ public class ExportDatamartProvider {
 
 	/**
 	 * Provides the implementation of the FHIR operation
-	 * <a href="https://www.centreantoinelacassagne.org/OperationDefinition/OD-ExportDatamart">
+	 * <a href="https://www.isis.com/OperationDefinition/OD-ExportDatamart">
 	 * $export-datamart</a>.
 	 * This operation export a datamart based on a ResearchStudy resource and returns a
 	 * {@link Binary} containing the evaluated research-variable parameters for a list of subjects in a specific format.
@@ -38,6 +38,7 @@ public class ExportDatamartProvider {
 		@OperationParam(name = "researchStudyEndpoint") Endpoint researchStudyEndpoint,
 		@OperationParam(name = "dataEndpoint") Endpoint dataEndpoint,
 		@OperationParam(name = "terminologyEndpoint") Endpoint terminologyEndpoint,
+		@OperationParam(name = "terminologyEndpoint") Endpoint remoteEndpoint,
 		@OperationParam(name = "type") String type,
 		@OperationParam(name = "structureMapUrl") CanonicalType stuctureMapUrl,
 		RequestDetails requestDetails
@@ -47,6 +48,7 @@ public class ExportDatamartProvider {
 			researchStudyEndpoint,
 			dataEndpoint,
 			terminologyEndpoint,
+			remoteEndpoint,
 			type,
 			stuctureMapUrl
 		);
