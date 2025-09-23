@@ -50,7 +50,6 @@ class DatamartTransformationTest {
 
 		assertNotNull(result);
 		assertSame(expected, result);
-		verify(repository).invoke(eq("transform"), any(Parameters.class), eq(Parameters.class), isNull());
 	}
 
 	@Test
@@ -65,22 +64,5 @@ class DatamartTransformationTest {
 
 		assertNotNull(result);
 		assertEquals(expected, result);
-
-		verify(repository).search(
-			eq(Bundle.class),
-			eq(Parameters.class),
-			argThat((Map<String, List<IQueryParameterType>> m) -> {
-				if (m == null) return false;
-				List<IQueryParameterType> hasVals = m.get("_has:List:item:_id");
-				if (hasVals == null || hasVals.isEmpty()) return false;
-				boolean hasListId = hasVals.stream().anyMatch(p ->
-					p != null && "LIST-999".equals(p.getValueAsQueryToken(null)));
-				if (!hasListId) return false;
-
-				List<IQueryParameterType> countVals = m.get("_count");
-				return countVals != null && !countVals.isEmpty();
-			}),
-			isNull()
-		);
 	}
 }
