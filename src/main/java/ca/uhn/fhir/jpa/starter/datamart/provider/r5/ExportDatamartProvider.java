@@ -38,7 +38,7 @@ public class ExportDatamartProvider {
 		@OperationParam(name = "researchStudyEndpoint") Endpoint researchStudyEndpoint,
 		@OperationParam(name = "dataEndpoint") Endpoint dataEndpoint,
 		@OperationParam(name = "terminologyEndpoint") Endpoint terminologyEndpoint,
-		@OperationParam(name = "terminologyEndpoint") Endpoint remoteEndpoint,
+		@OperationParam(name = "remoteEndpoint") Endpoint remoteEndpoint,
 		@OperationParam(name = "type") String type,
 		@OperationParam(name = "structureMapUrl") CanonicalType stuctureMapUrl,
 		RequestDetails requestDetails

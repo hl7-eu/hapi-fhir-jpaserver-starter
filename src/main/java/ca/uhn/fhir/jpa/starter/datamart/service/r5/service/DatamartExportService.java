@@ -48,7 +48,7 @@ public class DatamartExportService implements DatamartExportServiceImpl {
 		CanonicalType structureMapUrl
 	) {
 		Objects.requireNonNull(researchStudyUrl, "researchStudyUrl is required");
-		Repository repo = Repositories.proxy(repository, false, structureMapEndpoint, researchStudyEndpoint, null);
+		Repository repo = Repositories.proxy(repository, false, structureMapEndpoint, researchStudyEndpoint, remoteEndpoint);
 		Bundle b = repo.search(Bundle.class, ResearchStudy.class, Searches.byCanonical(researchStudyUrl.getCanonical()), null);
 		if (b.getEntry().isEmpty()) {
 			var errorMsg = String.format("Unable to find ResearchStudy with url: %s", researchStudyUrl.getCanonical());
