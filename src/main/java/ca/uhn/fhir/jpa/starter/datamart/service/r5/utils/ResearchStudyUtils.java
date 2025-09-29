@@ -154,7 +154,7 @@ public class ResearchStudyUtils {
 			return null;
 		}
 		Patient patient = (Patient) b.getEntry().get(0).getResource();
-		return "Patient/" + patient.getId();
+		return "Patient/" + patient.getIdElement().getIdPart();
 	}
 
 	/**
