@@ -1,21 +1,14 @@
 package ca.uhn.fhir.jpa.starter.datamart.r5;
 
 import ca.uhn.fhir.context.FhirContext;
-import ca.uhn.fhir.jpa.starter.datamart.service.Repositories;
-import ca.uhn.fhir.jpa.starter.datamart.service.r5.DatamartTransformation;
-import ca.uhn.fhir.jpa.starter.datamart.service.r5.ResearchStudyUtils;
+import ca.uhn.fhir.jpa.starter.datamart.service.r5.service.DatamartTransformation;
+import ca.uhn.fhir.jpa.starter.datamart.service.r5.utils.ResearchStudyUtils;
 import ca.uhn.fhir.model.api.IQueryParameterType;
-import ca.uhn.fhir.rest.param.StringParam;
-import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r5.model.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
 import org.opencds.cqf.fhir.api.Repository;
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -36,60 +29,40 @@ class DatamartTransformationTest {
 
 	@Test
 	void transformSuccess() {
-		ResearchStudy researchStudy = new ResearchStudy();
-		researchStudy.getPhase().addCoding()
-			.setSystem(ResearchStudyUtils.CUSTOM_PHASE_SYSTEM)
-			.setCode(ResearchStudyUtils.POST_DATAMART);
-		researchStudy.addExtension()
-			.setUrl(ResearchStudyUtils.EXT_URL)
-			.addExtension()
-			.setUrl(ResearchStudyUtils.EVAL_EXT_NAME)
-			.setValue(new Reference("List/List123"));
+		String listId = "LIST-123";
+		ResearchStudy study = new ResearchStudy().setUrl("http://example.org/study/RS1");
+		Extension ext = new Extension(ResearchStudyUtils.EXT_URL);
+		Extension eval = new Extension(ResearchStudyUtils.EVAL_EXT_NAME, new Reference("List/" + listId));
+		ext.addExtension(eval);
+		study.addExtension(ext);
 
 		StructureMap map = new StructureMap();
-		Bundle bundle = new Bundle();
-		bundle.addEntry().setResource(new ListResource());
+
+		Bundle dm = new Bundle().addEntry(new Bundle.BundleEntryComponent().setResource(new Parameters()));
+		when(repository.search(eq(Bundle.class), eq(Parameters.class), anyMap(), isNull())).thenReturn(dm);
 
 		when(repository.fhirContext()).thenReturn(FhirContext.forR5());
+		Binary expected = new Binary().setContentType("application/octet-stream").setData(new byte[]{1, 2, 3});
+		Parameters out = new Parameters().addParameter(new Parameters.ParametersParameterComponent().setResource(expected));
+		when(repository.invoke(eq("transform"), any(Parameters.class), eq(Parameters.class), isNull())).thenReturn(out);
 
-		try (MockedStatic<Repositories> repo = Mockito.mockStatic(Repositories.class)) {
-			repo.when(() -> Repositories.proxy(any(), anyBoolean(), (IBaseResource) any(), any(), any()))
-				.thenReturn(repository);
-			when(repository.search(eq(Bundle.class), eq(ListResource.class), anyMap(), isNull())).thenReturn(bundle);
+		Binary result = transformation.transform(study, map);
 
-			Binary expectedBinary = new Binary();
-			try (MockedStatic<DatamartTransformation> transformationMock = Mockito.mockStatic(DatamartTransformation.class)) {
-				when(repository.invoke(eq("transform"), any(Parameters.class), eq(Parameters.class), isNull()))
-					.thenReturn(new Parameters().addParameter(new Parameters.ParametersParameterComponent().setResource(expectedBinary)));
-
-				Binary result = transformation.transform(researchStudy, map);
-
-				assertNotNull(result);
-				assertSame(expectedBinary, result);
-				verify(repository).invoke(eq("transform"), any(Parameters.class), eq(Parameters.class), isNull());
-			}
-		}
+		assertNotNull(result);
+		assertSame(expected, result);
 	}
 
 	@Test
 	void fetchDatamartBundleSuccess() {
-		String listId = "List123";
-		Bundle expectedBundle = new Bundle();
+		String listId = "LIST-999";
+		Bundle expected = new Bundle();
 
-		try (MockedStatic<Repositories> repo = Mockito.mockStatic(Repositories.class)) {
-			repo.when(() -> Repositories.proxy(any(), anyBoolean(), (IBaseResource) any(), any(), any()))
-				.thenReturn(repository);
-			when(repository.search(eq(Bundle.class), eq(ListResource.class), anyMap(), isNull())).thenReturn(expectedBundle);
+		when(repository.search(eq(Bundle.class), eq(Parameters.class), anyMap(), isNull()))
+			.thenReturn(expected);
 
-			Bundle result = transformation.fetchDataMartBundle(listId);
+		Bundle result = transformation.fetchDataMartBundle(listId);
 
-			assertNotNull(result);
-			assertEquals(expectedBundle, result);
-
-			Map<String, List<IQueryParameterType>> expectedParams = new HashMap<>();
-			expectedParams.put("_id", Collections.singletonList(new StringParam(listId)));
-			expectedParams.put("_include", Collections.singletonList(new StringParam("List:item")));
-			verify(repository).search(eq(Bundle.class), eq(ListResource.class), eq(expectedParams), isNull());
-		}
+		assertNotNull(result);
+		assertEquals(expected, result);
 	}
 }

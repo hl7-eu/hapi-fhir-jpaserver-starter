@@ -1,7 +1,7 @@
 package ca.uhn.fhir.jpa.starter.datamart.r5;
 
 import ca.uhn.fhir.jpa.starter.datamart.service.CryptoUtils;
-import ca.uhn.fhir.jpa.starter.datamart.service.r5.ResearchStudyUtils;
+import ca.uhn.fhir.jpa.starter.datamart.service.r5.utils.ResearchStudyUtils;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import org.hl7.fhir.instance.model.api.IIdType;
 import org.hl7.fhir.r5.model.*;
@@ -156,7 +156,6 @@ class ResearchStudyUtilsTest {
 		assertTrue(ex.getMessage().contains("does not have an actualGroup defined in recruitment"));
 	}
 
-	// TODO: update the test to align with the new modification of using Identifier instead of reference
 	@Test
 	void getSubjectReferencesNullMemberReferenceElement() {
 		Group group = new Group();
@@ -188,7 +187,6 @@ class ResearchStudyUtilsTest {
 		assertTrue(ex.getMessage().contains("contains no members"));
 	}
 
-	// TODO: update the test to align with the new modification of using Identifier instead of reference
 	@Test
 	void getSubjectReferencesSuccess() {
 		Group group = new Group();
@@ -197,13 +195,28 @@ class ResearchStudyUtilsTest {
 		member.setEntity(new Reference().setIdentifier(new Identifier().setValue("enc1")));
 		group.addMember(member);
 
+		Patient p = new Patient();
+		p.setId("real1");
+		Bundle bundle = new Bundle();
+		bundle.addEntry().setResource(p);
+
 		try (MockedStatic<CryptoUtils> crypto = Mockito.mockStatic(CryptoUtils.class)) {
 			crypto.when(() -> CryptoUtils.decrypt("enc1")).thenReturn("real1");
+
+			when(repository.search(
+				eq(Bundle.class),
+				eq(Patient.class),
+				anyMap(),
+				isNull()
+			)).thenReturn(bundle);
+
 			List<String> refs = ResearchStudyUtils.getSubjectReferences(group, repository);
+
 			assertEquals(1, refs.size());
 			assertEquals("Patient/real1", refs.get(0));
 		}
 	}
+
 
 	@Test
 	void getSubjectReferencesEmptyGroup() {
@@ -213,7 +226,6 @@ class ResearchStudyUtilsTest {
 		assertTrue(refs.isEmpty());
 	}
 
-	// TODO: update the test to align with the new modification of using Identifier instead of reference
 	@Test
 	void getSubjectReferencesInvalidMember() {
 		Group group = new Group();
@@ -227,35 +239,5 @@ class ResearchStudyUtilsTest {
 		);
 		assertTrue(ex.getMessage().contains("invalid member reference"));
 	}
-    /*
-	@Test
-	void desanonmyseEncryptedIdSuccess() {
-		try (MockedStatic<CryptoUtils> crypto = Mockito.mockStatic(CryptoUtils.class)) {
-			crypto.when(() -> CryptoUtils.decrypt("enc123")).thenReturn("dec123");
-			String result = ResearchStudyUtils.desanonmyseEncryptedId("enc123");
-			assertEquals("dec123", result);
-		}
-	}
-
-	@Test
-	void desanonmyseEncryptedIdFailure() {
-		RuntimeException cause = new RuntimeException("fail");
-		try (MockedStatic<CryptoUtils> crypto = Mockito.mockStatic(CryptoUtils.class)) {
-			crypto.when(() -> CryptoUtils.decrypt("bad")).thenThrow(cause);
-			RuntimeException ex = assertThrows(RuntimeException.class, () ->
-				ResearchStudyUtils.desanonmyseEncryptedId("bad")
-			);
-			assertSame(cause, ex.getCause());
-		}
-	}
-
-	@Test
-	void pseudonymizeRealId() {
-		try (MockedStatic<CryptoUtils> crypto = Mockito.mockStatic(CryptoUtils.class)) {
-			crypto.when(() -> CryptoUtils.encrypt("id123")).thenReturn("encXYZ");
-			String result = ResearchStudyUtils.pseudonymizeRealId("id123");
-			assertEquals("encXYZ", result);
-		}
-	}*/
 }
 

@@ -1,4 +1,4 @@
-package ca.uhn.fhir.jpa.starter.datamart.service.r5;
+package ca.uhn.fhir.jpa.starter.datamart.service.r5.config;
 
 import ca.uhn.fhir.cr.common.RepositoryFactoryForRepositoryInterface;
 import ca.uhn.fhir.cr.config.CrBaseConfig;
@@ -6,6 +6,10 @@ import ca.uhn.fhir.cr.config.RepositoryConfig;
 import ca.uhn.fhir.jpa.starter.datamart.provider.r5.DatamartProvider;
 import ca.uhn.fhir.jpa.starter.datamart.provider.r5.ExportDatamartProvider;
 import ca.uhn.fhir.jpa.starter.datamart.service.DatamartEvaluationOptions;
+import ca.uhn.fhir.jpa.starter.datamart.service.r5.impl.DatamartExportServiceFactory;
+import ca.uhn.fhir.jpa.starter.datamart.service.r5.impl.DatamartServiceFactory;
+import ca.uhn.fhir.jpa.starter.datamart.service.r5.service.DatamartExportService;
+import ca.uhn.fhir.jpa.starter.datamart.service.r5.service.DatamartService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;

@@ -1,6 +1,6 @@
 package ca.uhn.fhir.jpa.starter.datamart.provider.r5;
 
-import ca.uhn.fhir.jpa.starter.datamart.service.r5.DatamartServiceFactory;
+import ca.uhn.fhir.jpa.starter.datamart.service.r5.impl.DatamartServiceFactory;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
@@ -19,7 +19,7 @@ public class DatamartProvider {
 
 	/**
 	 * Provides the implementation of the FHIR operation
-	 * <a href="https://www.centreantoinelacassagne.org/OperationDefinition/OD-GenerateDatamart">
+	 * <a href="https://www.isis.com/OperationDefinition/OD-GenerateDatamart">
 	 * $generate-datamart</a>.
 	 * This operation generates a datamart based on a ResearchStudy resource and returns a
 	 * {@link ListResource} containing the evaluated research-variable parameters for a list of subjects.
@@ -37,13 +37,15 @@ public class DatamartProvider {
 		@OperationParam(name = "researchStudyEndpoint") Endpoint researchStudyEndpoint,
 		@OperationParam(name = "dataEndpoint") Endpoint dataEndpoint,
 		@OperationParam(name = "terminologyEndpoint") Endpoint terminologyEndpoint,
+		@OperationParam(name = "cqlEngineEndpoint") Endpoint cqlEngineEndpoint,
 		RequestDetails requestDetails
 	) {
 		return myFactory.create(requestDetails).generateDatamart(
 			researchStudyUrl,
 			researchStudyEndpoint,
 			dataEndpoint,
-			terminologyEndpoint
+			terminologyEndpoint,
+			cqlEngineEndpoint
 		);
 	}
 }

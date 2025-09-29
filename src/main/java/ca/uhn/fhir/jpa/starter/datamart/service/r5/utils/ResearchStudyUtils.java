@@ -1,4 +1,4 @@
-package ca.uhn.fhir.jpa.starter.datamart.service.r5;
+package ca.uhn.fhir.jpa.starter.datamart.service.r5.utils;
 
 import ca.uhn.fhir.jpa.starter.datamart.service.CryptoUtils;
 import ca.uhn.fhir.model.api.IQueryParameterType;
@@ -13,9 +13,9 @@ import java.util.stream.Collectors;
 
 public class ResearchStudyUtils {
 	public static final String EXT_URL =
-		"https://www.centreantoinelacassagne.org/StructureDefinition/EXT-Datamart";
+		"https://www.isis.com/StructureDefinition/EXT-Datamart";
 	public static final String CUSTOM_PHASE_SYSTEM =
-		"https://www.centreantoinelacassagne.org/CodeSystem/COS-ResearchStudyPhase";
+		"https://www.isis.com/CodeSystem/COS-ResearchStudyPhase";
 	public static final String INITIAL_PHASE = "initial";
 	public static final String POST_DATAMART = "post-datamart";
 	public static final String VAR_EXT_NAME = "variable";
@@ -79,15 +79,16 @@ public class ResearchStudyUtils {
 	 * @throws ResourceNotFoundException if the group contains no members.
 	 */
 	public static Group getEligibleGroup(ResearchStudy study, Repository repository) {
-		if (!study.getRecruitment().hasActualGroup()) {
+		Reference groupRef = study.getRecruitment().getActualGroup();
+		if (groupRef == null ||
+			groupRef.getReferenceElement() == null ||
+			groupRef.getReferenceElement().getIdPart() == null ||
+			groupRef.getReferenceElement().getIdPart().isEmpty()) {
 			throw new IllegalArgumentException(
 				String.format(ERR_MISSING_GROUP, study.getUrl()));
 		}
 
-		Reference groupRef = study.getRecruitment().getActualGroup();
-		if (groupRef == null ||
-			groupRef.getReferenceElement() == null ||
-			!groupRef.getReferenceElement().getResourceType().equals("Group")) {
+		if (!"Group".equals(groupRef.getReferenceElement().getResourceType())) {
 			throw new IllegalArgumentException(
 				String.format(ERR_INVALID_REF_Group, study.getUrl())
 			);
@@ -96,7 +97,8 @@ public class ResearchStudyUtils {
 
 		if (group.getMember().isEmpty()) {
 			throw new ResourceNotFoundException(
-				String.format(ERR_NO_MEMBERS, groupRef.getId()));
+				String.format(ERR_NO_MEMBERS, groupRef.getId())
+			);
 		}
 		return group;
 	}
@@ -113,11 +115,33 @@ public class ResearchStudyUtils {
 			return List.of();
 		}
 
-		return group.getMember().stream()
-			.map(Group.GroupMemberComponent::getEntity)
-			.filter(Objects::nonNull)
-			.map(entity -> referenceFromIdentifier(entity, repository))
-			.collect(Collectors.toList());
+		List<String> refs = new ArrayList<>();
+		for (Group.GroupMemberComponent member : group.getMember()) {
+			Reference entity = member.getEntity();
+			if (entity == null) {
+				throw new ResourceNotFoundException(
+					String.format(ERR_INVALID_MEMBER_REF, group.getId())
+				);
+			}
+			if (entity.getReferenceElement() != null &&
+				entity.getReferenceElement().getResourceType() != null &&
+				!"Patient".equals(entity.getReferenceElement().getResourceType())) {
+				throw new ResourceNotFoundException(
+					String.format(ERR_INVALID_MEMBER_REF, group.getId())
+				);
+			}
+			Identifier identifier = entity.getIdentifier();
+			if (identifier == null || identifier.getValue() == null || identifier.getValue().isEmpty()) {
+				throw new ResourceNotFoundException(
+					String.format(ERR_INVALID_MEMBER_REF, group.getId())
+				);
+			}
+			String ref = referenceFromIdentifier(entity, repository);
+			if (ref != null) {
+				refs.add(ref);
+			}
+		}
+		return refs;
 	}
 
 	private static String referenceFromIdentifier(Reference entity, Repository repository) {
@@ -126,9 +150,11 @@ public class ResearchStudyUtils {
 		params.put("identifier",
 			Collections.singletonList(new TokenParam(id.getSystem(), id.getValue())));
 		Bundle b = repository.search(Bundle.class, Patient.class, params, null);
+		if(b.getEntry().isEmpty()) {
+			return null;
+		}
 		Patient patient = (Patient) b.getEntry().get(0).getResource();
-		IIdType pid = patient.getIdElement();
-		return pid.getResourceType() + "/" + pid.getIdPart();
+		return "Patient/" + patient.getIdElement().getIdPart();
 	}
 
 	/**

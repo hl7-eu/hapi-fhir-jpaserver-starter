@@ -11,7 +11,7 @@ import org.opencds.cqf.fhir.utility.repository.FederatedRepository;
 import java.util.*;
 
 public class DatamartRepository implements Repository {
-    private static final Set<String> terminologyResourceSet = new HashSet(Arrays.asList("ValueSet", "CodeSystem", "ConceptMap"));
+    private static final Set<String> terminologyResourceSet = new HashSet(Arrays.asList("ValueSet", "CodeSystem", "ConceptMap", "StructureMap"));
     private static final Set<String> researchResourceSet = new HashSet(Arrays.asList("Library", "EvidenceVariable", "ResearchStudy", "Group", "ListResource"));
     private final Repository data;
     private final Repository research;
@@ -78,7 +78,7 @@ public class DatamartRepository implements Repository {
     }
 
     public <R extends IBaseResource, P extends IBaseParameters> R invoke(String name, P parameters, Class<R> returnType, Map<String, String> headers) {
-        return this.data.invoke(name, parameters, returnType, headers);
+        return this.terminology.invoke(name, parameters, returnType, headers);
     }
 
     public <P extends IBaseParameters> MethodOutcome invoke(String name, P parameters, Map<String, String> headers) {

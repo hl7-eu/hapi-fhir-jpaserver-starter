@@ -1,136 +1,240 @@
 package ca.uhn.fhir.jpa.starter.datamart.r5;
 
+import ca.uhn.fhir.jpa.starter.common.RemoteCqlClient;
 import ca.uhn.fhir.jpa.starter.datamart.service.DatamartEvaluationOptions;
 import ca.uhn.fhir.jpa.starter.datamart.service.Repositories;
-import ca.uhn.fhir.jpa.starter.datamart.service.r5.*;
+import ca.uhn.fhir.jpa.starter.datamart.service.r5.service.DatamartProcessor;
+import ca.uhn.fhir.jpa.starter.datamart.service.r5.service.DatamartService;
+import ca.uhn.fhir.jpa.starter.datamart.service.r5.utils.ResearchStudyUtils;
 import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r5.model.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.MockedConstruction;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
-import org.mockito.junit.jupiter.MockitoExtension;
 import org.opencds.cqf.fhir.api.Repository;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
+/**
+ * DatamartServiceTest
+ *
+ * <p>Focuses on the service-level responsibilities:
+ * <ul>
+ *   <li>Locating the ResearchStudy</li>
+ *   <li>Validating preconditions (phase must not be {@code initial})</li>
+ *   <li>Assembling evaluation {@link Parameters} with endpoints</li>
+ *   <li>Delegating to {@link DatamartProcessor}</li>
+ *   <li>Persisting/Updating the {@link ListResource} and updating the {@link ResearchStudy}</li>
+ * </ul>
+ *
+ * <p>Tests are written in the same style as the Cohorting tests: clear scenario names, helpers, and targeted assertions.</p>
+ */
 class DatamartServiceTest {
 
-	private static final String STUDY_URL = "http://example.org/studyUrl";
-
-	@Mock
 	private Repository repository;
-	@Mock
 	private DatamartEvaluationOptions settings;
-
 	private DatamartService service;
-	private CanonicalType studyUrl;
-	private Endpoint rsEndpoint;
-	private Endpoint dataEndpoint;
-	private Endpoint termEndpoint;
+
+	private static final String STUDY_URL = "http://example.org/study/RS-1";
 
 	@BeforeEach
 	void setUp() {
+		repository = mock(Repository.class);
+		settings = mock(DatamartEvaluationOptions.class);
 		service = new DatamartService(repository, settings);
-		studyUrl = new CanonicalType(STUDY_URL);
-		rsEndpoint = new Endpoint();
-		dataEndpoint = new Endpoint();
-		termEndpoint = new Endpoint();
 	}
 
+
 	@Test
-	void generateDatamartStudyNotFoundException() {
+	void ResearchStudyNotFoundThrows404() {
 		try (MockedStatic<Repositories> reps = Mockito.mockStatic(Repositories.class)) {
-			reps.when(() -> Repositories.proxy(eq(repository), anyBoolean(), (IBaseResource) any(), any(), any()))
+			reps.when(() -> Repositories.proxy(any(Repository.class), anyBoolean(), (IBaseResource) any(), any(), any()))
 				.thenReturn(repository);
+
 			when(repository.search(eq(Bundle.class), eq(ResearchStudy.class), any(), isNull()))
 				.thenReturn(new Bundle());
 
 			ResourceNotFoundException ex = assertThrows(
 				ResourceNotFoundException.class,
-				() -> service.generateDatamart(studyUrl, rsEndpoint, dataEndpoint, termEndpoint)
+				() -> service.generateDatamart(
+					canonical(STUDY_URL),
+					endpoint("content"), endpoint("data"), endpoint("term"), endpoint("cql")
+				)
 			);
-			assertTrue(ex.getMessage().contains("Unable to find ResearchStudy with url: " + STUDY_URL));
+			assertTrue(ex.getMessage().contains(STUDY_URL));
 		}
 	}
 
-	@Test
-	void generateDatamartInitialPhaseException() {
-		ResearchStudy rs = new ResearchStudy();
-		rs.setUrl(STUDY_URL);
-		rs.getPhase().addCoding()
-			.setSystem(ResearchStudyUtils.CUSTOM_PHASE_SYSTEM)
-			.setCode(ResearchStudyUtils.INITIAL_PHASE);
-		Bundle bundle = new Bundle();
-		bundle.addEntry(new Bundle.BundleEntryComponent().setResource(rs));
 
-		try (MockedStatic<Repositories> reps = Mockito.mockStatic(Repositories.class)) {
-			reps.when(() -> Repositories.proxy(any(), anyBoolean(), (IBaseResource) any(), any(), any()))
+	@Test
+	void generateDatamartInitialPhaseThrowsPreconditionFailure() {
+		ResearchStudy researchStudy = initiateStudyWithPhase(STUDY_URL, ResearchStudyUtils.INITIAL_PHASE);
+
+		try (MockedStatic<Repositories> repo = Mockito.mockStatic(Repositories.class)) {
+			repo.when(() -> Repositories.proxy(any(Repository.class), anyBoolean(), (IBaseResource) any(), any(), any()))
 				.thenReturn(repository);
+
 			when(repository.search(eq(Bundle.class), eq(ResearchStudy.class), any(), isNull()))
-				.thenReturn(bundle);
+				.thenReturn(bundleWith(researchStudy));
 
 			ResourceNotFoundException ex = assertThrows(
 				ResourceNotFoundException.class,
-				() -> service.generateDatamart(studyUrl, rsEndpoint, dataEndpoint, termEndpoint)
+				() -> service.generateDatamart(
+					canonical(STUDY_URL),
+					endpoint("content"), endpoint("data"), endpoint("term"), endpoint("cql")
+				)
 			);
-			assertTrue(ex.getMessage().contains("cohorting is needed before generating the datamart"));
+			assertTrue(ex.getMessage().toLowerCase().contains("cohort"), "Precondition message should indicate cohorting is required");
 		}
 	}
 
-	// TODO: update the test to align with the new modification of using Identifier instead of reference
+
 	@Test
-	void generateDatamartSuccessfulFlow() {
-		ResearchStudy rs = new ResearchStudy();
-		rs.setUrl(STUDY_URL);
-		rs.getPhase().addCoding()
-			.setSystem(ResearchStudyUtils.CUSTOM_PHASE_SYSTEM)
-			.setCode("post-cohorting");
-		Bundle bundle = new Bundle();
-		bundle.addEntry(new Bundle.BundleEntryComponent().setResource(rs));
+	void generateDatamartSuccessCreatesListAndUpdatesStudy() {
+		ResearchStudy researchStudy = initiateStudyWithPhase(STUDY_URL, "post-cohort");
 
-		rs.addExtension(new Extension(ResearchStudyUtils.EXT_URL));
+		ListResource listFromProcessor = new ListResource().setStatus(ListResource.ListStatus.CURRENT);
 
-		try (MockedStatic<Repositories> reps = Mockito.mockStatic(Repositories.class)) {
-			reps.when(() -> Repositories.proxy(eq(repository), anyBoolean(), eq(dataEndpoint), eq(rsEndpoint), eq(termEndpoint)))
+		try (MockedStatic<Repositories> reps = Mockito.mockStatic(Repositories.class);
+			  MockedConstruction<RemoteCqlClient> cqlClientConstructed = Mockito.mockConstruction(RemoteCqlClient.class);
+			  MockedConstruction<DatamartProcessor> datamartProcessorConstructed = Mockito.mockConstruction(
+				  DatamartProcessor.class,
+				  (mock, ctx) -> when(mock.generateDatamart(any(ResearchStudy.class), any(Parameters.class)))
+					  .thenReturn(listFromProcessor)
+			  )) {
+
+			reps.when(() -> Repositories.proxy(any(Repository.class), anyBoolean(), (IBaseResource) any(), any(), any()))
 				.thenReturn(repository);
+
 			when(repository.search(eq(Bundle.class), eq(ResearchStudy.class), any(), isNull()))
-				.thenReturn(bundle);
+				.thenReturn(bundleWith(researchStudy));
 
-			try (MockedConstruction<DatamartProcessor> procCons = Mockito.mockConstruction(DatamartProcessor.class, (mockProc, ctx) -> {
-				when(mockProc.generateDatamart(eq(rs))).thenReturn(new ListResource());
-			})) {
-				MethodOutcome outcome = new MethodOutcome();
-				outcome.setId(new IdType("ListResource", "list1"));
-				when(repository.create(any(ListResource.class))).thenReturn(outcome);
+			when(repository.create(any(ListResource.class)))
+				.thenAnswer(inv -> {
+					ListResource lr = inv.getArgument(0, ListResource.class);
+					MethodOutcome mo = new MethodOutcome();
+					mo.setId(new IdType("List", "list1"));
+					return mo;
+				});
 
-				MethodOutcome updateOutcome = new MethodOutcome();
-				updateOutcome.setId(outcome.getId());
-				when(repository.update(eq(rs))).thenReturn(updateOutcome);
+			ListResource out = service.generateDatamart(
+				canonical(STUDY_URL),
+				endpoint("content"), endpoint("data"), endpoint("term"), endpoint("cql")
+			);
 
-				ListResource result = service.generateDatamart(studyUrl, rsEndpoint, dataEndpoint, termEndpoint);
+			assertNotNull(out);
+			assertEquals("list1", out.getIdElement().getIdPart(), "List must be created and returned with server-assigned id");
 
-				assertNotNull(result);
-				Coding coding = rs.getPhase().getCoding().get(0);
-				assertEquals(ResearchStudyUtils.POST_DATAMART, coding.getCode());
-				Extension ext = rs.getExtensionByUrl(ResearchStudyUtils.EXT_URL)
-					.getExtension().stream()
-					.filter(e -> "evaluation".equals(e.getUrl()))
-					.findFirst().orElse(null);
-				assertNotNull(ext);
-				assertEquals("ListResource/list1", ((Reference) ext.getValue()).getReference());
+			Extension ext = researchStudy.getExtensionByUrl(ResearchStudyUtils.EXT_URL);
+			Extension eval = ext.getExtensionByUrl(ResearchStudyUtils.EVAL_EXT_NAME);
+			assertEquals("List/list1", eval.getValueReference().getReference());
 
-				verify(repository).update(eq(rs));
-			}
+			Coding coding = researchStudy.getPhase().getCodingFirstRep();
+			assertEquals(ResearchStudyUtils.CUSTOM_PHASE_SYSTEM, coding.getSystem());
+			assertEquals(ResearchStudyUtils.POST_DATAMART, coding.getCode());
 		}
+	}
+
+	@Test
+	void updateResearchStudyWithExistingEvaluationUpdatesListOnly() {
+		ResearchStudy researchStudy = initiateStudyWithPhase(STUDY_URL, "post-cohort");
+
+		Extension extension = researchStudy.getExtensionByUrl(ResearchStudyUtils.EXT_URL);
+		extension.addExtension()
+			.setUrl(ResearchStudyUtils.EVAL_EXT_NAME)
+			.setValue(new Reference("List/listX"));
+
+		ListResource list = new ListResource();
+		ListResource updatedList = new ListResource();
+		updatedList.setId("List/listX");
+
+		when(repository.update(any(ListResource.class))).thenReturn(new MethodOutcome().setResource(updatedList));
+
+		ListResource out = service.updateResearchStudyWithList(repository, researchStudy, list);
+
+		assertEquals("listX", out.getIdElement().getIdPart());
+		verify(repository).update(any(ListResource.class));
+		verify(repository, never()).create(any(ListResource.class));
+	}
+
+
+	@Test
+	void updateResearchStudyPhaseWithList() {
+		ResearchStudy researchStudy = initiateStudyWithPhase(STUDY_URL, "post-cohort");
+
+		ListResource list = new ListResource();
+
+		when(repository.create(any(ListResource.class))).thenAnswer(inv -> {
+			MethodOutcome mo = new MethodOutcome();
+			mo.setId(new IdType("List", "list2"));
+			return mo;
+		});
+
+		ListResource out = service.updateResearchStudyWithList(repository, researchStudy, list);
+
+		assertEquals("list2", out.getIdElement().getIdPart());
+
+		Extension eval = researchStudy.getExtensionByUrl(ResearchStudyUtils.EXT_URL).getExtensionByUrl(ResearchStudyUtils.EVAL_EXT_NAME);
+		assertNotNull(eval);
+		assertEquals("List/list2", eval.getValueReference().getReference());
+
+		Coding coding = researchStudy.getPhase().getCodingFirstRep();
+		assertEquals(ResearchStudyUtils.CUSTOM_PHASE_SYSTEM, coding.getSystem());
+		assertEquals(ResearchStudyUtils.POST_DATAMART, coding.getCode());
+
+		verify(repository).create(any(ListResource.class));
+		verify(repository).update(eq(researchStudy));
+	}
+	
+	@Test
+	void updateResearchStudyWithList() {
+		ResearchStudy researchStudy = initiateStudyWithPhase(STUDY_URL, "post-cohort");
+
+		ListResource list = new ListResource();
+		ListResource created = new ListResource();
+		created.setId("List/createdY");
+
+		when(repository.create(any(ListResource.class)))
+			.thenReturn(new MethodOutcome().setResource(created));
+
+		ListResource updatedList = service.updateResearchStudyWithList(repository, researchStudy, list);
+
+		assertSame(created, updatedList, "Should return the created resource when present in MethodOutcome");
+		Extension eval = researchStudy.getExtensionByUrl(ResearchStudyUtils.EXT_URL).getExtensionByUrl(ResearchStudyUtils.EVAL_EXT_NAME);
+		assertEquals("List/createdY", eval.getValueReference().getReference());
+		verify(repository).update(eq(researchStudy));
+	}
+
+	private static ResearchStudy initiateStudyWithPhase(String url, String phaseCode) {
+		ResearchStudy researchStudy = new ResearchStudy();
+		researchStudy.setUrl(url);
+		CodeableConcept phase = new CodeableConcept();
+		phase.addCoding().setSystem(ResearchStudyUtils.CUSTOM_PHASE_SYSTEM).setCode(phaseCode);
+		researchStudy.setPhase(phase);
+		researchStudy.addExtension(new Extension(ResearchStudyUtils.EXT_URL));
+		return researchStudy;
+	}
+
+	private static Bundle bundleWith(Resource resource) {
+		Bundle bundle = new Bundle();
+		bundle.addEntry().setResource(resource);
+		return bundle;
+	}
+
+	private static CanonicalType canonical(String url) {
+		return new CanonicalType(url);
+	}
+
+	private static Endpoint endpoint(String id) {
+		Endpoint ep = new Endpoint();
+		ep.setId(id);
+		return ep;
 	}
 }
