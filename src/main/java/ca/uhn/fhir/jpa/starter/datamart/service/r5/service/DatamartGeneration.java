@@ -272,9 +272,12 @@ public class DatamartGeneration {
 
 		for (Extension extension : expression.getExtension()) {
 			if (extension.getUrl().equals(EXT_EV_PARAM)) {
-				String name = ((StringType) extension.getExtensionByUrl(SUB_NAME).getValue()).getValue();
-				DataType value = extension.getExtensionByUrl(SUB_VALUE).getValue();
-				expressionParam.addParameter(name, value);
+				Extension nameExt = extension.getExtensionByUrl(SUB_NAME);
+				String name = nameExt != null ? ((StringType) nameExt.getValue()).getValue():null;
+
+				Extension valueExt = extension.getExtensionByUrl(SUB_VALUE);
+				DataType value = valueExt != null ? valueExt.getValue():null;
+				if(value != null && name != null) expressionParam.addParameter(name, value);
 			}
 		}
 		return expressionParam;
