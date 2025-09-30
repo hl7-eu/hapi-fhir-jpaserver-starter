@@ -83,7 +83,8 @@ jobs:
       - name: Wait for FHIR server to be ready
         run: |
           for i in {1..30}; do
-            STATUS=$(docker exec ci-mapping-engine curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/metadata || true)
+            STATUS=$(docker run --rm --network container:ci-mapping-engine curlimages/curl \
+              curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/metadata || true)
             if [ "$STATUS" -eq 200 ]; then
               echo "FHIR server is ready!"
               exit 0
