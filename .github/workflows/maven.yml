@@ -4,15 +4,16 @@
 name: Java CI with Maven
 
 on:
-  push:
-    branches:
-      - '**'
-    paths-ignore:
-      - "charts/**"
-  pull_request:
-    branches: [ master ]
-    paths-ignore:
-      - "charts/**"
+  workflow_dispatch:
+#  push:
+#    branches:
+#      - '**'
+#    paths-ignore:
+#      - "charts/**"
+#  pull_request:
+#    branches: [ master ]
+#    paths-ignore:
+#      - "charts/**"
 
 jobs:
   build:
