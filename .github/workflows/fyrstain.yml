@@ -5,12 +5,12 @@ on:
   push:
     branches: INFR-75 #[ "main", "feature/*", "[A-Z]+-[0-9]+" ]
 
-#env:
+env:
 #  TODO
   # List of Test IDs for integration tests (can also be set as a secret)
 #  TEST_IDS: '["SMOKE","HEALTH","API"]'
 #  TESTBED_URL: 'http://testbed.local/api'
-#  DOCKER_NETWORK: 'testbed_network'
+  DOCKER_NETWORK: 'pandora_network'
 
 jobs:
   build:
@@ -62,18 +62,20 @@ jobs:
       - name: Push Docker image
         run: docker push docker.registry.fyrstain.com/socle/mapping-service:${{ steps.docker_tag.outputs.docker_tag }}
 
-#  deploy-and-test:
-#    needs: build
-#    runs-on: self-hosted
-#    steps:
-#      - name: Start FHIR server container
-#        run: |
-#          docker stop my-app || true
-#          docker rm my-app || true
-#          docker run -d --name my-app --network $DOCKER_NETWORK \
+  deploy-and-test:
+    needs: build
+    runs-on: self-hosted
+    steps:
+      - name: Start FHIR server container
+        run: |
+          docker stop ci-mapping-engine || true
+          docker rm ci-mapping-engine || true
+          docker run -d --name ci-mapping-engine --network $DOCKER_NETWORK \
+#            TODO See if we need this ?
 #            -p 8080:8080 \
-#            nexus.example.com/your-project:${{ needs.build.outputs.docker_tag }}
-#
+               docker.registry.fyrstain.com/socle/mapping-service:${{ needs.build.outputs.docker_tag }}
+
+#      TODO See if we can du that with docker, without having to open a port.
 #      - name: Wait for FHIR server to be ready
 #        run: |
 #          for i in {1..30}; do
