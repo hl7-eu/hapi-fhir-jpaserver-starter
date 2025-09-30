@@ -112,7 +112,7 @@ jobs:
     runs-on: self-hosted
     strategy:
       matrix:
-        test_id: ${{ fromJSON(github.event.inputs..TEST_IDS) }}
+        test_id: ${{ fromJSON(github.event.inputs.TEST_IDS) }}
     steps:
       - name: Trigger test ${{ matrix.test_id }}
         id: trigger
