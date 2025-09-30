@@ -1,0 +1,138 @@
+name: CI/CD Pipeline
+
+on:
+  workflow_dispatch:
+  push:
+    branches: INFR-75 #[ "main", "feature/*", "[A-Z]+-[0-9]+" ]
+
+env:
+#  TODO
+  # List of Test IDs for integration tests (can also be set as a secret)
+#  TEST_IDS: '["SMOKE","HEALTH","API"]'
+#  TESTBED_URL: 'http://testbed.local/api'
+#  DOCKER_NETWORK: 'testbed_network'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      docker_tag: ${{ steps.docker_tag.outputs.docker_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 17
+
+      - name: Run unit tests
+        run: mvn -B test --file pom.xml
+
+      - name: Build package
+        run: mvn -B package -DskipTests --file pom.xml
+
+#      - name: Determine Docker tag
+#        id: docker_tag
+#        run: |
+#          BRANCH_NAME=${GITHUB_REF##*/}
+#          TAG="latest"
+#          # Match any uppercase letters + dash + numbers (Jira ticket)
+#          if [[ "$BRANCH_NAME" =~ ^[A-Z]+-[0-9]+$ ]]; then
+#            TAG="$BRANCH_NAME"
+#          else
+#            TAG=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+#          fi
+#          echo "Docker tag: $TAG"
+#          echo "docker_tag=$TAG" >> $GITHUB_OUTPUT
+#
+#      - name: Build Docker image
+#        run: docker build -t nexus.example.com/your-project:${{ steps.docker_tag.outputs.docker_tag }} .
+#
+#      - name: Log in to Nexus registry
+#        uses: docker/login-action@v3
+#        with:
+#          registry: nexus.example.com
+#          username: ${{ secrets.NEXUS_USER }}
+#          password: ${{ secrets.NEXUS_PASSWORD }}
+#
+#      - name: Push Docker image
+#        run: docker push nexus.example.com/your-project:${{ steps.docker_tag.outputs.docker_tag }}
+#
+#  deploy-and-test:
+#    needs: build
+#    runs-on: self-hosted
+#    steps:
+#      - name: Start FHIR server container
+#        run: |
+#          docker stop my-app || true
+#          docker rm my-app || true
+#          docker run -d --name my-app --network $DOCKER_NETWORK \
+#            -p 8080:8080 \
+#            nexus.example.com/your-project:${{ needs.build.outputs.docker_tag }}
+#
+#      - name: Wait for FHIR server to be ready
+#        run: |
+#          for i in {1..30}; do
+#            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/metadata || true)
+#            if [ "$STATUS" -eq 200 ]; then
+#              echo "FHIR server is ready!"
+#              exit 0
+#            fi
+#            echo "Waiting for FHIR server... ($i)"
+#            sleep 5
+#          done
+#          echo "FHIR server failed to start in time"
+#          docker logs my-app
+#          exit 1
+#
+#      - name: Activate SUT
+#        run: |
+#          curl -s -X POST "$TESTBED_URL/suts/activate" \
+#            -H "Content-Type: application/json" \
+#            -d '{"name":"my-app","url":"http://my-app:8080"}'
+#
+#  integration-tests:
+#    needs: deploy-and-test
+#    runs-on: self-hosted
+#    strategy:
+#      matrix:
+#        test_id: ${{ fromJSON(env.TEST_IDS) }}
+#    steps:
+#      - name: Trigger test ${{ matrix.test_id }}
+#        id: trigger
+#        run: |
+#          RESPONSE=$(curl -s -X POST "$TESTBED_URL/tests/run" \
+#            -H "Content-Type: application/json" \
+#            -d "{\"sut\":\"my-app\",\"scenario\":\"${{ matrix.test_id }}\"}")
+#          echo "id=$(echo $RESPONSE | jq -r .id)" >> $GITHUB_OUTPUT
+#
+#      - name: Poll test result
+#        run: |
+#          for i in {1..20}; do
+#            STATUS=$(curl -s "$TESTBED_URL/tests/${{ steps.trigger.outputs.id }}/status" | jq -r .status)
+#            echo "Status: $STATUS"
+#            if [ "$STATUS" = "PASSED" ]; then exit 0; fi
+#            if [ "$STATUS" = "FAILED" ]; then exit 1; fi
+#            sleep 10
+#          done
+#          echo "Timeout waiting for test"
+#          exit 1
+#
+#  cleanup:
+#    needs: integration-tests
+#    runs-on: self-hosted
+#    if: always()
+#    steps:
+#      - name: Deactivate SUT
+#        run: |
+#          curl -s -X POST "$TESTBED_URL/suts/deactivate" \
+#            -H "Content-Type: application/json" \
+#            -d '{"name":"my-app"}'
+#
+#      - name: Stop and clean container
+#        run: |
+#          docker stop my-app || true
+#          docker rm my-app || true
+#          docker rmi nexus.example.com/your-project:${{ needs.build.outputs.docker_tag }} || true
+#          docker system prune -f
