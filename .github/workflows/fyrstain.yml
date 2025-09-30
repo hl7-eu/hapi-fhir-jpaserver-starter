@@ -5,7 +5,7 @@ on:
   push:
     branches: INFR-75 #[ "main", "feature/*", "[A-Z]+-[0-9]+" ]
 
-env:
+#env:
 #  TODO
   # List of Test IDs for integration tests (can also be set as a secret)
 #  TEST_IDS: '["SMOKE","HEALTH","API"]'
