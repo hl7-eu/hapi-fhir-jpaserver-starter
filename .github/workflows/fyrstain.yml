@@ -6,9 +6,8 @@ on:
     branches: INFR-75 #[ "main", "feature/*", "[A-Z]+-[0-9]+" ]
 
 env:
-#  TODO
   # List of Test IDs for integration tests (can also be set as a secret)
-#  TEST_IDS: '["SMOKE","HEALTH","API"]'
+  TEST_IDS: '["TS-careCircle-create"]'
   TESTBED_URL: 'https://pandora.internal.fyrstain.com/test-engine'
   DOCKER_NETWORK: 'pandora_network'
 
@@ -107,22 +106,22 @@ jobs:
             -d '{"resourceType": "Device","id": "ci-mapping-engine","displayName": "CI Mapping Engine","status": "active","name": [{"value": "CI Mapping Engine","type": "patient-reported-name","display": true}],"type": [{"coding": [{"system": "http://fyrstain.com/pdt/ValueSet/systemTypes","code": "sut","display": "SUT"}]}],"version": [{"type": {"coding": [{"system": "urn:iso:std:iso:11073:10101","code": "531975","display": "Software revision"}]},"value": "${{ needs.build.outputs.docker_tag }}"},{"type": {"coding": [{"system": "http://fyrstain.com/pdt/CodeSystem/PandoraStandards","code": "fhir","display": "FHIR"}]},"value": "R5"}],"endpoint": [{"reference": "Endpoint/ci-mapping-engine-endpoint"}]}'
 
 
-#
-#  integration-tests:
-#    needs: deploy
-#    runs-on: self-hosted
-#    strategy:
-#      matrix:
-#        test_id: ${{ fromJSON(env.TEST_IDS) }}
-#    steps:
-#      - name: Trigger test ${{ matrix.test_id }}
-#        id: trigger
-#        run: |
-#          RESPONSE=$(curl -s -X POST "$TESTBED_URL/tests/run" \
-#            -H "Content-Type: application/json" \
-#            -d "{\"sut\":\"my-app\",\"scenario\":\"${{ matrix.test_id }}\"}")
-#          echo "id=$(echo $RESPONSE | jq -r .id)" >> $GITHUB_OUTPUT
-#
+
+  integration-tests:
+    needs: deploy
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        test_id: ${{ fromJSON(env.TEST_IDS) }}
+    steps:
+      - name: Trigger test ${{ matrix.test_id }}
+        id: trigger
+        run: |
+          RESPONSE=$(curl -s -X POST "$TESTBED_URL/TestScript/${{ matrix.test_id }}/$launchTest" \
+            -H "Content-Type: application/fhir+json" \
+            -d '{"resourceType":"Parameters","parameter":[{"name":"serverID","valueString":"ci-mapping-engine"},{"name":"clientID","valueString":"db5bd2c0-2342-4567-9740-dd6ada4b9eb3"},{"name":"automatic","valueBoolean":true}]}')
+          echo "id=$(echo $RESPONSE | jq -r .id)" >> $GITHUB_OUTPUT
+
 #      - name: Poll test result
 #        run: |
 #          for i in {1..20}; do
@@ -134,11 +133,10 @@ jobs:
 #          done
 #          echo "Timeout waiting for test"
 #          exit 1
-#
+
 
   cleanup:
-    # TODO Change once tests are run
-    needs: deploy
+    needs: integration-tests
     runs-on: self-hosted
     if: always()
     steps:
@@ -152,4 +150,3 @@ jobs:
           docker stop ci-mapping-engine || true
           docker rm ci-mapping-engine || true
           docker rmi docker.registry.fyrstain.com/socle/mapping-service:${{ needs.build.outputs.docker_tag }} || true
-          docker system prune -f
