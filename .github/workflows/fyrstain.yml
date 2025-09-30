@@ -7,9 +7,11 @@ on:
 
 env:
   # List of Test IDs for integration tests (can also be set as a secret)
-  TEST_IDS: '["TS-careCircle-create"]'
   TESTBED_URL: 'https://pandora.internal.fyrstain.com/test-engine'
   DOCKER_NETWORK: 'pandora_network'
+
+vars:
+  TEST_IDS: '["TS-careCircle-create"]'
 
 jobs:
   build:
@@ -112,7 +114,7 @@ jobs:
     runs-on: self-hosted
     strategy:
       matrix:
-        test_id: ${{ fromJSON(env.TEST_IDS) }}
+        test_id: ${{ fromJSON(vars.TEST_IDS) }}
     steps:
       - name: Trigger test ${{ matrix.test_id }}
         id: trigger
