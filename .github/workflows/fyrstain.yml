@@ -80,24 +80,21 @@ jobs:
           docker run -d --name ci-mapping-engine --network $DOCKER_NETWORK \
                docker.registry.fyrstain.com/socle/mapping-service:${{ needs.build.outputs.docker_tag }}
 
-#            TODO See if we need this ?
-#            -p 8080:8080 \
+      - name: Wait for FHIR server to be ready
+        run: |
+          for i in {1..30}; do
+            STATUS=$(docker exec ci-mapping-engine curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/metadata || true)
+            if [ "$STATUS" -eq 200 ]; then
+              echo "FHIR server is ready!"
+              exit 0
+            fi
+            echo "Waiting for FHIR server... ($i)"
+            sleep 5
+          done
+          echo "FHIR server failed to start in time"
+          docker logs fhir
+          exit 1
 
-#      TODO See if we can du that with docker, without having to open a port.
-#      - name: Wait for FHIR server to be ready
-#        run: |
-#          for i in {1..30}; do
-#            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/metadata || true)
-#            if [ "$STATUS" -eq 200 ]; then
-#              echo "FHIR server is ready!"
-#              exit 0
-#            fi
-#            echo "Waiting for FHIR server... ($i)"
-#            sleep 5
-#          done
-#          echo "FHIR server failed to start in time"
-#          docker logs my-app
-#          exit 1
 #
 #      - name: Activate SUT
 #        run: |
