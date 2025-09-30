@@ -71,9 +71,10 @@ jobs:
           docker stop ci-mapping-engine || true
           docker rm ci-mapping-engine || true
           docker run -d --name ci-mapping-engine --network $DOCKER_NETWORK \
+               docker.registry.fyrstain.com/socle/mapping-service:${{ needs.build.outputs.docker_tag }}
+
 #            TODO See if we need this ?
 #            -p 8080:8080 \
-               docker.registry.fyrstain.com/socle/mapping-service:${{ needs.build.outputs.docker_tag }}
 
 #      TODO See if we can du that with docker, without having to open a port.
 #      - name: Wait for FHIR server to be ready
