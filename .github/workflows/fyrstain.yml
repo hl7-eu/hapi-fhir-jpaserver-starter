@@ -62,7 +62,7 @@ jobs:
       - name: Push Docker image
         run: docker push docker.registry.fyrstain.com/socle/mapping-service:${{ steps.docker_tag.outputs.docker_tag }}
 
-  deploy-and-test:
+  deploy:
     needs: build
     runs-on: self-hosted
     steps:
@@ -109,7 +109,7 @@ jobs:
 
 #
 #  integration-tests:
-#    needs: deploy-and-test
+#    needs: deploy
 #    runs-on: self-hosted
 #    strategy:
 #      matrix:
@@ -135,20 +135,21 @@ jobs:
 #          echo "Timeout waiting for test"
 #          exit 1
 #
-#  cleanup:
-#    needs: integration-tests
-#    runs-on: self-hosted
-#    if: always()
-#    steps:
-#      - name: Deactivate SUT
-#        run: |
-#          curl -s -X POST "$TESTBED_URL/suts/deactivate" \
-#            -H "Content-Type: application/json" \
-#            -d '{"name":"my-app"}'
-#
-#      - name: Stop and clean container
-#        run: |
-#          docker stop my-app || true
-#          docker rm my-app || true
-#          docker rmi nexus.example.com/your-project:${{ needs.build.outputs.docker_tag }} || true
-#          docker system prune -f
+
+  cleanup:
+    # TODO Change once tests are run
+    needs: deploy
+    runs-on: self-hosted
+    if: always()
+    steps:
+      - name: Deactivate SUT
+        run: |
+          curl -s -X DELETE "$TESTBED_URL/Endpoint/ci-mapping-engine-endpoint"          
+          curl -s -X DELETE "$TESTBED_URL/Device/ci-mapping-engine"
+
+      - name: Stop and clean container
+        run: |
+          docker stop ci-mapping-engine || true
+          docker rm ci-mapping-engine || true
+          docker rmi docker.registry.fyrstain.com/socle/mapping-service:${{ needs.build.outputs.docker_tag }} || true
+          docker system prune -f
