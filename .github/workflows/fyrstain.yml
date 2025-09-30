@@ -26,25 +26,28 @@ jobs:
           distribution: zulu
           java-version: 17
 
+      - name: Compile sources
+        run: mvn -B compile --file pom.xml
+
       - name: Run unit tests
         run: mvn -B test --file pom.xml
 
       - name: Build package
         run: mvn -B package -DskipTests --file pom.xml
 
-#      - name: Determine Docker tag
-#        id: docker_tag
-#        run: |
-#          BRANCH_NAME=${GITHUB_REF##*/}
-#          TAG="latest"
-#          # Match any uppercase letters + dash + numbers (Jira ticket)
-#          if [[ "$BRANCH_NAME" =~ ^[A-Z]+-[0-9]+$ ]]; then
-#            TAG="$BRANCH_NAME"
-#          else
-#            TAG=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-#          fi
-#          echo "Docker tag: $TAG"
-#          echo "docker_tag=$TAG" >> $GITHUB_OUTPUT
+      - name: Determine Docker tag
+        id: docker_tag
+        run: |
+          BRANCH_NAME=${GITHUB_REF##*/}
+          TAG="latest"
+          # Match any uppercase letters + dash + numbers (Jira ticket)
+          if [[ "$BRANCH_NAME" =~ ^[A-Z]+-[0-9]+$ ]]; then
+            TAG="$BRANCH_NAME"
+          else
+            TAG=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          fi
+          echo "Docker tag: $TAG"
+          echo "docker_tag=$TAG" >> $GITHUB_OUTPUT
 #
 #      - name: Build Docker image
 #        run: docker build -t nexus.example.com/your-project:${{ steps.docker_tag.outputs.docker_tag }} .
