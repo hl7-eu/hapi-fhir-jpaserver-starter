@@ -5,6 +5,9 @@ name: Java CI with Maven
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - INFR-75
 #  push:
 #    branches:
 #      - '**'
