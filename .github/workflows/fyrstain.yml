@@ -61,7 +61,7 @@ jobs:
 
       - name: Push Docker image
         run: docker push docker.registry.fyrstain.com/socle/mapping-service:${{ steps.docker_tag.outputs.docker_tag }}
-#
+
 #  deploy-and-test:
 #    needs: build
 #    runs-on: self-hosted
