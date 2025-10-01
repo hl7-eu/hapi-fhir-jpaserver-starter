@@ -130,18 +130,18 @@ jobs:
 #          exit 1
 
 
-  cleanup:
-    needs: integration-tests
-    runs-on: self-hosted
-    if: always()
-    steps:
-      - name: Deactivate SUT
-        run: |
-          curl -s -X DELETE "$TESTBED_URL/Endpoint/ci-mapping-engine-endpoint"          
-          curl -s -X DELETE "$TESTBED_URL/Device/ci-mapping-engine"
-
-      - name: Stop and clean container
-        run: |
-          docker stop ci-mapping-engine || true
-          docker rm ci-mapping-engine || true
-          docker rmi docker.registry.fyrstain.com/socle/mapping-service:${{ needs.build.outputs.docker_tag }} || true
+#  cleanup:
+#    needs: integration-tests
+#    runs-on: self-hosted
+#    if: always()
+#    steps:
+#      - name: Deactivate SUT
+#        run: |
+#          curl -s -X DELETE "$TESTBED_URL/Device/ci-mapping-engine"
+#          curl -s -X DELETE "$TESTBED_URL/Endpoint/ci-mapping-engine-endpoint"
+#
+#      - name: Stop and clean container
+#        run: |
+#          docker stop ci-mapping-engine || true
+#          docker rm ci-mapping-engine || true
+#          docker rmi docker.registry.fyrstain.com/socle/mapping-service:${{ needs.build.outputs.docker_tag }} || true
