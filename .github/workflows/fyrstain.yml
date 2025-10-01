@@ -121,7 +121,7 @@ jobs:
       - name: Poll test result
         run: |
           for i in {1..20}; do
-            RESULT=$(curl -s "$TESTBED_URL/TestPlan/${{ steps.trigger.outputs.id }}" | jq -r '.assertion[]?.type.coding[]? | select(.system=="https://fyrstain.com/testPlanResult") | .code')
+            RESULT=$(curl -s "$TESTBED_URL/TestPlan/${{ steps.trigger.outputs.id }}" | jq -r '.testCase[]?.assertion[]?.type.coding[]? | select(.system=="https://fyrstain.com/testPlanResult") | .code')
             echo "Result: $RESULT"
             if [[ "$RESULT" == "pass" || "$RESULT" == "warning" || "$RESULT" == "skip" ]]; then
               exit 0
