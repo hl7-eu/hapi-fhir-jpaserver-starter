@@ -115,6 +115,7 @@ jobs:
           RESPONSE=$(curl -s -X POST "$TESTBED_URL/TestScript/TS-careCircle-create/$launchTest" \
             -H "Content-Type: application/fhir+json" \
             -d '{"resourceType":"Parameters","parameter":[{"name":"serverID","valueString":"ci-mapping-engine"},{"name":"clientID","valueString":"db5bd2c0-2342-4567-9740-dd6ada4b9eb3"},{"name":"automatic","valueBoolean":true}]}')
+          echo "Full response: $RESPONSE"
           echo "id=$(echo $RESPONSE | jq -r .id)" >> $GITHUB_OUTPUT
 
 #      - name: Poll test result
