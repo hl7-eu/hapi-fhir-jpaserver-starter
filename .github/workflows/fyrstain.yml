@@ -77,6 +77,7 @@ jobs:
           docker stop ci-mapping-engine || true
           docker rm ci-mapping-engine || true
           docker run -d --name ci-mapping-engine --network $DOCKER_NETWORK \
+               -e HAPI_FHIR_MAPPING_ENABLED=true \
                docker.registry.fyrstain.com/socle/mapping-service:${{ needs.build.outputs.docker_tag }}
 
       - name: Wait for FHIR server to be ready
