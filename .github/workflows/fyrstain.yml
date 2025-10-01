@@ -112,7 +112,7 @@ jobs:
       - name: Trigger test
         id: trigger
         run: |
-          RESPONSE=$(curl -s -X POST "$TESTBED_URL/TestScript/TS-careCircle-create/$launchTest" \
+          RESPONSE=$(curl -s -X POST "$TESTBED_URL/TestScript/TS-careCircle-create/\$launchTest" \
             -H "Content-Type: application/fhir+json" \
             -d '{"resourceType":"Parameters","parameter":[{"name":"serverID","valueString":"ci-mapping-engine"},{"name":"clientID","valueString":"db5bd2c0-2342-4567-9740-dd6ada4b9eb3"},{"name":"automatic","valueBoolean":true}]}')
           echo "Full response: $RESPONSE"
@@ -131,18 +131,18 @@ jobs:
 #          exit 1
 
 
-#  cleanup:
-#    needs: integration-tests
-#    runs-on: self-hosted
-#    if: always()
-#    steps:
-#      - name: Deactivate SUT
-#        run: |
-#          curl -s -X DELETE "$TESTBED_URL/Device/ci-mapping-engine"
-#          curl -s -X DELETE "$TESTBED_URL/Endpoint/ci-mapping-engine-endpoint"
-#
-#      - name: Stop and clean container
-#        run: |
-#          docker stop ci-mapping-engine || true
-#          docker rm ci-mapping-engine || true
-#          docker rmi docker.registry.fyrstain.com/socle/mapping-service:${{ needs.build.outputs.docker_tag }} || true
+  cleanup:
+    needs: integration-tests
+    runs-on: self-hosted
+    if: always()
+    steps:
+      - name: Deactivate SUT
+        run: |
+          curl -s -X DELETE "$TESTBED_URL/Device/ci-mapping-engine"
+          curl -s -X DELETE "$TESTBED_URL/Endpoint/ci-mapping-engine-endpoint"
+
+      - name: Stop and clean container
+        run: |
+          docker stop ci-mapping-engine || true
+          docker rm ci-mapping-engine || true
+          docker rmi docker.registry.fyrstain.com/socle/mapping-service:${{ needs.build.outputs.docker_tag }} || true
