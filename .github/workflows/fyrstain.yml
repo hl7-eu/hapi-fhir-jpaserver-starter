@@ -165,7 +165,7 @@ jobs:
             -u '${{ secrets.DOCKER_REGISTRY_USERNAME }}:${{ secrets.DOCKER_REGISTRY_PASSWORD }}' \
             "https://$REGISTRY/v2/$REPO/manifests/$DIGEST"
 
-          echo "Image $REGISTRY/$REPO:$TAG deleted."
+          echo "Image docker.registry.fyrstain.com/socle/mapping-service:${{ needs.build.outputs.docker_tag }} deleted."
 
       - name: Stop and clean container
         run: |
