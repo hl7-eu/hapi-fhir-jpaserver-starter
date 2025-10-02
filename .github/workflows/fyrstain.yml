@@ -145,10 +145,33 @@ jobs:
           curl -s -X DELETE "$TESTBED_URL/Device/ci-mapping-engine"
           curl -s -X DELETE "$TESTBED_URL/Endpoint/ci-mapping-engine-endpoint"
 
-#TODO REMOVE DOCKER IMAGE
+      - name: Delete Docker image
+        run: |
+          # Get image manifest digest
+          DIGEST=$(curl -s -I -H "Accept: application/vnd.docker.distribution.manifest.v2+json" -H "Content-Type: application/json" \
+            -u '${{ secrets.NEXUS_USER }}:${{ secrets.NEXUS_PASSWORD }}' \
+            "https://docker.registry.fyrstain.com/v2/socle/mapping-service/manifests/${{ needs.build.outputs.docker_tag }}" | \
+            grep Docker-Content-Digest | awk '{print $2}' | tr -d $'\r')
+
+          echo "Image digest: $DIGEST"
+
+          if [ -z "$DIGEST" ]; then
+            echo "Digest not found. Exiting."
+            exit 1
+          fi
+
+          # Delete the image manifest
+          curl -s -X DELETE \
+            -u '${{ secrets.DOCKER_REGISTRY_USERNAME }}:${{ secrets.DOCKER_REGISTRY_PASSWORD }}' \
+            "https://$REGISTRY/v2/$REPO/manifests/$DIGEST"
+
+          echo "Image $REGISTRY/$REPO:$TAG deleted."
 
       - name: Stop and clean container
         run: |
           docker stop ci-mapping-engine || true
           docker rm ci-mapping-engine || true
           docker rmi docker.registry.fyrstain.com/socle/mapping-service:${{ needs.build.outputs.docker_tag }} || true
+
+      - name: Log out from Docker
+        run: docker logout docker.registry.fyrstain.com
