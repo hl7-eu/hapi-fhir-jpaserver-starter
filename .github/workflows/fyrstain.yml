@@ -163,7 +163,7 @@ jobs:
           # Delete the image manifest
           curl -s -X DELETE \
             -u '${{ secrets.DOCKER_REGISTRY_USERNAME }}:${{ secrets.DOCKER_REGISTRY_PASSWORD }}' \
-            "https://$REGISTRY/v2/$REPO/manifests/$DIGEST"
+            "https://docker.registry.fyrstain.com/v2/socle/mapping-service/manifests/$DIGEST"
 
           echo "Image docker.registry.fyrstain.com/socle/mapping-service:${{ needs.build.outputs.docker_tag }} deleted."
 
