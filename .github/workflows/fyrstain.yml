@@ -136,7 +136,7 @@ jobs:
 
 
   cleanup:
-    needs: integration-tests
+    needs: [build,integration-tests]
     runs-on: self-hosted
     if: always()
     steps:
