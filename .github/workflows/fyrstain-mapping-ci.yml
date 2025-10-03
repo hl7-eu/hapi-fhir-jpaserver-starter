@@ -2,8 +2,9 @@ name: CI Pipeline
 
 on:
   workflow_dispatch:
-  push:
-    branches: INFR-75 #[ "main", "feature/*", "[A-Z]+-[0-9]+" ]
+  pull_request:
+    branches:
+      - mapping
 
 env:
   TESTPLAN_ID: ${{ vars.MAPPING_ENGINE_TESTPLAN_ID }}
