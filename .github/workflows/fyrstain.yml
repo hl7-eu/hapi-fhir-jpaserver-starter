@@ -162,16 +162,16 @@ jobs:
 
           # Delete the image manifest
           curl -s -X DELETE \
-            -u '${{ secrets.DOCKER_REGISTRY_USERNAME }}:${{ secrets.DOCKER_REGISTRY_PASSWORD }}' \
+            -u ${{ secrets.DOCKER_REGISTRY_USERNAME }}:${{ secrets.DOCKER_REGISTRY_PASSWORD }} \
             "https://phenix.fyrstain.com/nexus/repository/docker-fyrstain/v2/socle/mapping-service/manifests/$DIGEST"
 
           echo "Image docker.registry.fyrstain.com/socle/mapping-service:${{ needs.build.outputs.docker_tag }} deleted."
 
-      - name: Stop and clean container
-        run: |
-          docker stop ci-mapping-engine || true
-          docker rm ci-mapping-engine || true
-          docker rmi docker.registry.fyrstain.com/socle/mapping-service/manifests/${{ needs.build.outputs.docker_tag }} || true
+#      - name: Stop and clean container
+#        run: |
+#          docker stop ci-mapping-engine || true
+#          docker rm ci-mapping-engine || true
+#          docker rmi docker.registry.fyrstain.com/socle/mapping-service/manifests/${{ needs.build.outputs.docker_tag }} || true
 
       - name: Log out from Docker
         run: docker logout docker.registry.fyrstain.com
