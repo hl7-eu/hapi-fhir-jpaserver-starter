@@ -171,7 +171,7 @@ jobs:
         run: |
           docker stop ci-mapping-engine || true
           docker rm ci-mapping-engine || true
-          docker rmi docker.registry.fyrstain.com/socle/mapping-service:${{ needs.build.outputs.docker_tag }} || true
+          docker rmi docker.registry.fyrstain.com/socle/mapping-service/manifests/${{ needs.build.outputs.docker_tag }} || true
 
       - name: Log out from Docker
         run: docker logout docker.registry.fyrstain.com
