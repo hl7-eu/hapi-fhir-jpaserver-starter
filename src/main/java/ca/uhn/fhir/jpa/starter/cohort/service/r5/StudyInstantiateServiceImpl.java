@@ -101,7 +101,6 @@ public class StudyInstantiateServiceImpl implements ca.uhn.fhir.jpa.starter.coho
 			}
 			throw new ResourceNotFoundException("ResearchStudy with canonical '" + studyUrl.getValue() + "' not found");
 		}
-		// ResearchStudy definition = (ResearchStudy) studyBundle.getEntry().get(0).getResource();
 
 		// 4. Create instances for each EV definition
 		Map<String, EvidenceVariable> variableInstanceMap = new LinkedHashMap<>();
