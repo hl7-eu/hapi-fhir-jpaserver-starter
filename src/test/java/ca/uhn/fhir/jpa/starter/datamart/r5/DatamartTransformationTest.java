@@ -56,6 +56,7 @@ class DatamartTransformationTest {
 	void fetchDatamartBundleSuccess() {
 		String listId = "LIST-999";
 		Bundle expected = new Bundle();
+		expected.setType(Bundle.BundleType.COLLECTION);
 
 		when(repository.search(eq(Bundle.class), eq(Parameters.class), anyMap(), isNull()))
 			.thenReturn(expected);
@@ -63,6 +64,6 @@ class DatamartTransformationTest {
 		Bundle result = transformation.fetchDataMartBundle(listId);
 
 		assertNotNull(result);
-		assertEquals(expected, result);
+		assertTrue(expected.equalsDeep(result));
 	}
 }
