@@ -1643,28 +1643,57 @@ public class Mapper {
 							context.getVariables(),
 							context.getTarget().getParameter().get(1),
 							context.getTarget().toString());
-					String outputFormatOrType =
-							(context.getTarget().getParameter().size() > 2)
-									? getParamStringNoNull(
-											context.getVariables(),
-											context.getTarget().getParameter().get(2),
-											context.getTarget().toString())
-									: null;
 
-					boolean forceInstant =
-							outputFormatOrType != null && "instant".equalsIgnoreCase(outputFormatOrType.trim());
-					boolean forceTime =
-							outputFormatOrType != null && "time".equalsIgnoreCase(outputFormatOrType.trim());
-
-					DateTimeFormatter outputFormatter = (!forceInstant && !forceTime && outputFormatOrType != null)
-							? DateTimeFormatter.ofPattern(outputFormatOrType)
+					String param2 = (context.getTarget().getParameter().size() > 2)
+							? getParamStringNoNull(
+									context.getVariables(),
+									context.getTarget().getParameter().get(2),
+									context.getTarget().toString())
 							: null;
 
+					String param3 = (context.getTarget().getParameter().size() > 3)
+							? getParamStringNoNull(
+									context.getVariables(),
+									context.getTarget().getParameter().get(3),
+									context.getTarget().toString())
+							: null;
+
+					dateSource = normalize(dateSource);
+					inputFormat = normalize(inputFormat);
+					param2 = normalize(param2);
+					param3 = normalize(param3);
+
+					boolean p2IsMode = isMode(param2);
+					boolean p3IsMode = isMode(param3);
+
+					String mode = null;
+					String outputPattern = null;
+
+					if (p2IsMode) {
+						mode = param2;
+						if (param3 != null && !p3IsMode) outputPattern = param3;
+					} else {
+						outputPattern = param2;
+						if (p3IsMode) mode = param3;
+					}
+
+					boolean forceInstant = "instant".equalsIgnoreCase(mode);
+					boolean forceTime = "time".equalsIgnoreCase(mode);
+					boolean forceNoFhir = "nofhir".equalsIgnoreCase(mode);
+
 					DateTimeFormatter inputFormatter = DateTimeFormatter.ofPattern(inputFormat);
+					DateTimeFormatter outputFormatter =
+							(outputPattern != null) ? DateTimeFormatter.ofPattern(outputPattern) : null;
 
 					try {
 						LocalDateTime ldt = LocalDateTime.parse(dateSource, inputFormatter);
 
+						if (forceNoFhir) {
+							String out = (outputFormatter != null)
+									? ldt.atZone(ZoneOffset.UTC).format(outputFormatter)
+									: dateSource;
+							return new StringType(out);
+						}
 						if (forceInstant) {
 							return new InstantType(
 									Date.from(ldt.atZone(ZoneOffset.UTC).toInstant()));
@@ -1684,6 +1713,18 @@ public class Mapper {
 						try {
 							LocalDate ld = LocalDate.parse(dateSource, inputFormatter);
 
+							if (forceNoFhir) {
+								if (outputFormatter != null) {
+									if (patternNeedsTime(outputPattern)) {
+										String out =
+												ld.atStartOfDay(ZoneOffset.UTC).format(outputFormatter);
+										return new StringType(out);
+									}
+									return new StringType(ld.format(outputFormatter));
+								}
+								return new StringType(dateSource);
+							}
+
 							if (forceInstant) {
 								return new InstantType(Date.from(
 										ld.atStartOfDay(ZoneOffset.UTC).toInstant()));
@@ -1691,18 +1732,27 @@ public class Mapper {
 							if (forceTime) {
 								return new TimeType("00:00:00");
 							}
+
 							if (outputFormatter != null) {
-								String formatted =
-										ld.atStartOfDay(ZoneOffset.UTC).format(outputFormatter);
+								if (patternNeedsTime(outputPattern)) {
+									String formatted =
+											ld.atStartOfDay(ZoneOffset.UTC).format(outputFormatter);
+									return new DateTimeType(formatted);
+								}
+								String formatted = ld.format(outputFormatter);
 								return new DateTimeType(formatted);
 							}
+
 							return new DateType(
 									Date.from(ld.atStartOfDay(ZoneOffset.UTC).toInstant()));
-
 						} catch (Exception e2) {
 							try {
 								LocalTime lt = LocalTime.parse(dateSource, inputFormatter);
 
+								if (forceNoFhir) {
+									String out = (outputFormatter != null) ? lt.format(outputFormatter) : dateSource;
+									return new StringType(out);
+								}
 								if (forceInstant) {
 									LocalDateTime ldt = lt.atDate(LocalDate.now());
 									return new InstantType(
@@ -1715,6 +1765,14 @@ public class Mapper {
 								return new TimeType(formatted);
 
 							} catch (Exception e3) {
+								if (looksLikeDate(dateSource)) {
+									throw new IllegalArgumentException(
+											String.format(
+													"Could not parse date '%s' with input format '%s'",
+													dateSource, inputFormat),
+											e2);
+								}
+
 								throw new IllegalArgumentException(
 										String.format(
 												"Could not parse date/time '%s' with input format '%s'",
@@ -1741,6 +1799,48 @@ public class Mapper {
 							context.getTarget().toString(), context.getRule().getName(), e.getMessage()),
 					e);
 		}
+	}
+
+	private static boolean isMode(String s) {
+		if (s == null) return false;
+		String t = s.trim();
+		return "instant".equalsIgnoreCase(t) || "time".equalsIgnoreCase(t) || "nofhir".equalsIgnoreCase(t);
+	}
+
+	private static boolean looksLikeDate(String s) {
+		if (s == null) return false;
+		String t = s.trim();
+		// ISO date or starts with yyyy
+		return t.contains("-") || t.matches("^\\d{4}.*");
+	}
+
+	private static String normalize(String s) {
+		if (s == null) return null;
+		String t = s.trim();
+
+		// remove wrapping quotes
+		if ((t.startsWith("'") && t.endsWith("'")) || (t.startsWith("\"") && t.endsWith("\""))) {
+			t = t.substring(1, t.length() - 1).trim();
+		}
+
+		// replace NBSP-like spaces then trim
+		t = t.replace('\u00A0', ' ')
+				.replace('\u2007', ' ')
+				.replace('\u202F', ' ')
+				.trim();
+
+		return t;
+	}
+
+	private static boolean patternNeedsTime(String pattern) {
+		if (pattern == null) return false;
+		return pattern.contains("H")
+				|| pattern.contains("h")
+				|| pattern.contains("m")
+				|| pattern.contains("s")
+				|| pattern.contains("S")
+				|| pattern.contains("n")
+				|| pattern.contains("a"); // am/pm
 	}
 
 	private String normalizeAppendParam(String value) {
