@@ -582,7 +582,9 @@ public class Mapper {
 		// Only message or can it be segments ?
 		if (sourceObject instanceof Message) {
 			items = processHL7v2Object(context, sourceObject);
-		} else if (sourceObject instanceof GenericSegment) {
+		} else if (sourceObject instanceof Group) {
+			items = processHL7v2Object(context, sourceObject);
+		} else if (sourceObject instanceof Segment || sourceObject instanceof GenericSegment) {
 			items = processHL7v2Object(context, sourceObject);
 		} else {
 			items = new ArrayList<>();
@@ -920,88 +922,143 @@ public class Mapper {
 			try {
 				Path path = new Path(elementName);
 
-				List<GenericSegment> segments;
-				if (hl7v2Object instanceof Message) {
-					segments = findSegments((Message) hl7v2Object, path);
+				// 1) Path to a group
+				if (path.isGroupOnly()) {
+					List<Group> groups = new ArrayList<>();
+
+					if (hl7v2Object instanceof Message msg) {
+						groups.addAll(findGroups(msg, path));
+					} else if (hl7v2Object instanceof Group group) {
+						groups.addAll(findGroups(group, path));
+					} else {
+						logger.info("Group-only path {} cannot be applied to {}", elementName, hl7v2Object.getClass().getName());
+					}
+
+					items.addAll(groups);
+					continue;
+				}
+
+				// 2) Path to a segment
+				List<GenericSegment> segments = new ArrayList<>();
+
+				if (hl7v2Object instanceof Message msg) {
+					segments = findSegments(msg, path);
+				} else if (hl7v2Object instanceof Group group) {
+					segments = findSegments(group, path);
 				} else {
 					segments = List.of(toGenericSegment(hl7v2Object));
 				}
 
 				if (path.getField() == null) {
 					items.addAll(segments);
+					continue;
+				}
+
+				if (segments.isEmpty()) {
+					logger.info("Field not found in HL7v2 source : {}", source.getElement());
+					continue;
+				}
+
+				List<Varies> fields;
+				if (path.getFieldRepetition() != null) {
+					fields = List.of((Varies) segments.get(0).getField(path.getField(), path.getFieldRepetition()));
 				} else {
-					List<Varies> fields;
-					if (path.getFieldRepetition() != null) {
-						fields = List.of((Varies) segments.get(0).getField(path.getField(), path.getFieldRepetition()));
-					} else {
-						fields = Arrays.stream(segments.get(0).getField(path.getField()))
-								.map(t -> (Varies) t)
-								.collect(Collectors.toList());
-					}
+					fields = Arrays.stream(segments.get(0).getField(path.getField()))
+						.map(t -> (Varies) t)
+						.collect(Collectors.toList());
+				}
 
-					String elementStringValue = null;
+				String elementStringValue = null;
 
-					if (!fields.isEmpty()) {
-						if (path.getComponent() != null) {
-							ca.uhn.hl7v2.model.Type data = fields.get(0).getData();
-							// Data is composite
-							if (data instanceof GenericComposite) {
-								GenericComposite fieldData = (GenericComposite) data;
-								Varies component = (Varies) fieldData.getComponent(path.getComponent());
-								if (path.getSubComponent() != null) {
-									GenericComposite componentData = (GenericComposite) component.getData();
+				if (!fields.isEmpty()) {
+					if (path.getComponent() != null) {
+						ca.uhn.hl7v2.model.Type data = fields.get(0).getData();
+
+						if (data instanceof GenericComposite) {
+							GenericComposite fieldData = (GenericComposite) data;
+							Varies component = (Varies) fieldData.getComponent(path.getComponent());
+
+							if (path.getSubComponent() != null) {
+								if (component.getData() instanceof GenericComposite componentData) {
 									Varies subComponent = (Varies) componentData.getComponent(path.getSubComponent());
 									elementStringValue = subComponent.getData().toString();
-								} else {
-									elementStringValue = component.getData().toString();
 								}
-							}
-							// Data is not composite (primitive)
-							else {
-								// Check we are not looking for anything other than the first component (no other
-								// component, no sub-component)
-								if (path.getComponent() != null
-										&& path.getComponent() == 0
-										&& path.getSubComponent() == null) {
-									elementStringValue = data.toString();
-								}
-								// Otherwise, we don't set the value and will log as not found
+							} else {
+								elementStringValue = component.getData().toString();
 							}
 						} else {
-							elementStringValue = fields.get(0).getData().toString();
+							if (path.getComponent() == 0 && path.getSubComponent() == null) {
+								elementStringValue = data.toString();
+							}
 						}
-					}
-
-					if (elementStringValue != null) {
-						item = getFHIRItem(elementStringValue, source.getType());
-					} else if (source.hasDefaultValue()
-							&& source.getType().equals(source.getDefaultValue().fhirType())) {
-						item = source.getDefaultValue();
-					} else if (source.hasDefaultValue()
-							&& !source.getType().equals(source.getDefaultValue().fhirType())) {
-						throw new InvalidRequestException(String.format(
-								"Default value type does not match in %s for rule %s source %s !",
-								context.getStructureMap().getUrl(),
-								context.getRule().getName(),
-								source.getContext()));
-					}
-
-					if (item != null) {
-						checkValues(source, List.of(item), context.getRule().getName());
-						if (!matchesCondition(source, item, context.getVariables())) {
-							skip = true;
-							break;
-						}
-						items.add(item);
 					} else {
-						logger.info("Field not found in HL7v2 source : " + source.getElement());
+						elementStringValue = fields.get(0).getData().toString();
 					}
+				}
+
+				if (elementStringValue != null) {
+					item = getFHIRItem(elementStringValue, source.getType());
+				} else if (source.hasDefaultValue()
+					&& source.getType().equals(source.getDefaultValue().fhirType())) {
+					item = source.getDefaultValue();
+				} else if (source.hasDefaultValue()
+					&& !source.getType().equals(source.getDefaultValue().fhirType())) {
+					throw new InvalidRequestException(String.format(
+						"Default value type does not match in %s for rule %s source %s !",
+						context.getStructureMap().getUrl(),
+						context.getRule().getName(),
+						source.getContext()));
+				}
+
+				if (item != null) {
+					checkValues(source, List.of(item), context.getRule().getName());
+					if (!matchesCondition(source, item, context.getVariables())) {
+						skip = true;
+						break;
+					}
+					items.add(item);
+				} else {
+					logger.info("Field not found in HL7v2 source : {}", source.getElement());
 				}
 			} catch (ClassCastException | HL7Exception e) {
 				logger.info("Field not found in HL7v2 source: " + elementName, e);
 			}
 		}
+
 		return skip ? new ArrayList<>() : items;
+	}
+
+	private List<Group> findGroups(Message msg, Path path) {
+		return findGroups((Group) msg, path);
+	}
+
+	private List<Group> findGroups(Group root, Path path) {
+		List<Group> currentGroups = new ArrayList<>();
+		currentGroups.add(root);
+
+		List<String> groups = path.getGroups();
+		List<Integer> reps = path.getGroupRepetitions();
+
+		for (int i = 0; i < groups.size(); i++) {
+			String groupName = groups.get(i);
+			Integer rep = reps.get(i);
+
+			List<Group> nextGroups = new ArrayList<>();
+			for (Group group : currentGroups) {
+				nextGroups.addAll(getGroupsByName(group, groupName, rep));
+			}
+			currentGroups = nextGroups;
+		}
+
+		if (!path.isGroupOnly()) {
+			return currentGroups;
+		}
+
+		List<Group> result = new ArrayList<>();
+		for (Group group : currentGroups) {
+			result.addAll(getGroupsByName(group, path.getTerminalGroup(), path.getTerminalGroupRepetition()));
+		}
+		return result;
 	}
 
 	private String normalizeSegmentName(String name) {
@@ -1094,6 +1151,51 @@ public class Mapper {
 
 		if (result.isEmpty()) {
 			result.addAll(scanGroupsRecursively(msg, path));
+		}
+
+		return result;
+	}
+
+	private List<GenericSegment> findSegments(Group root, Path path) throws HL7Exception {
+		List<GenericSegment> result = new ArrayList<>();
+
+		List<Group> currentGroups = new ArrayList<>();
+		currentGroups.add(root);
+
+		List<String> groups = path.getGroups();
+		List<Integer> groupReps = path.getGroupRepetitions();
+
+		for (int i = 0; i < groups.size(); i++) {
+			String groupName = groups.get(i);
+			Integer rep = groupReps.get(i);
+
+			List<Group> nextGroups = new ArrayList<>();
+			for (Group group : currentGroups) {
+				nextGroups.addAll(getGroupsByName(group, groupName, rep));
+			}
+			currentGroups = nextGroups;
+		}
+
+		for (Group group : currentGroups) {
+			for (String name : group.getNames()) {
+				if (!normalizeSegmentName(name).equalsIgnoreCase(normalizeSegmentName(path.getSegment()))) {
+					continue;
+				}
+
+				try {
+					Structure[] segs = group.getAll(name);
+					for (int i = 0; i < segs.length; i++) {
+						if (path.getSegmentRepetition() == null || i == path.getSegmentRepetition()) {
+							result.add(toGenericSegment(segs[i]));
+						}
+					}
+				} catch (HL7Exception ignored) {
+				}
+			}
+		}
+
+		if (result.isEmpty()) {
+			result.addAll(scanGroupsRecursively(root, path));
 		}
 
 		return result;
