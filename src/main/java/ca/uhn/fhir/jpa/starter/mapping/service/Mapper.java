@@ -94,24 +94,31 @@ public class Mapper {
 	private final StructureMapUtilities.ITransformerServices services;
 	private final IFhirResourceDao<StructureMap> structureMapDao;
 	private final IGenericClient clientStructureMap;
+	private final MatchboxTransformService matchboxTransformService;
+	private final StructureMapResolver structureMapResolver;
 
 	public Mapper(
 			IWorkerContext worker,
 			FHIRPathEngine fhirPathEngine,
 			StructureMapUtilities.ITransformerServices services,
 			IFhirResourceDao<StructureMap> structureMapDao,
-			IGenericClient clientStructureMap) {
+			IGenericClient clientStructureMap,
+			MatchboxTransformService matchboxTransformService) {
 		this.worker = worker;
 		this.fhirPathEngine = fhirPathEngine;
 		this.services = services;
 		this.structureMapDao = structureMapDao;
 		this.clientStructureMap = clientStructureMap;
+		this.matchboxTransformService = matchboxTransformService;
+		this.structureMapResolver = new StructureMapResolver(clientStructureMap, structureMapDao);
 	}
 
 	public Parameters map(StructureMap structureMap, Parameters parameters) {
 		logger.info("Start Mapping using map : " + structureMap.getUrl());
 
-		StructureMap resolved = resolveImports(structureMap, new HashSet<>());
+		List<StructureMap> importedMaps = new ArrayList<>();
+
+		StructureMap resolved = resolveImports(structureMap, new HashSet<>(), importedMaps);
 
 		if (resolved.getGroup().isEmpty()) {
 			throw new InvalidRequestException("StructureMap.group is required !");
@@ -119,51 +126,94 @@ public class Mapper {
 
 		Parameters result = new Parameters();
 
-		for (StructureMap.StructureMapGroupComponent group : resolved.getGroup()) {
-			Variables variables = new Variables();
+		StructureMap.StructureMapGroupComponent firstGroup = structureMap.getGroup().getFirst();
 
-			for (StructureMap.StructureMapGroupInputComponent input : group.getInput()) {
-				String inputName = input.getName();
+		boolean isCDAToFhir = isCDAToFhir(firstGroup);
+		boolean isFhirToCda = isFhirToCda(firstGroup);
+		if (isCDAToFhir || isFhirToCda || isFhirToFhir(firstGroup)) {
+			//TODO update how input are parsed
+			//TODO See for multiple inputs ?
+			String inputContent = firstGroup.getInput().stream()
+				.filter(i -> StructureMap.StructureMapInputMode.SOURCE.equals(i.getMode()))
+				.map(StructureMap.StructureMapGroupInputComponent::getName)
+				.map(name -> {
+					Binary parameter = (Binary) parameters.getParameter("input").getPart().stream()
+						.filter(p -> name.equals(p.getName()))
+						.findFirst()
+						.map(Parameters.ParametersParameterComponent::getResource)
+						.orElse(null);
+					return new String(Base64.getDecoder().decode(parameter.getContentAsBase64()), StandardCharsets.UTF_8);
+				})
+				.findFirst().orElse("");
 
-				Binary parameter = (Binary) parameters.getParameter("input").getPart().stream()
+			String outputContent = matchboxTransformService.transform(
+				structureMap,
+				importedMaps,
+				null,
+				inputContent,
+				!isFhirToCda
+			);
+
+			//TODO See for multiple outputs ?
+			String outputName = firstGroup.getInput().stream()
+				.filter(i -> StructureMap.StructureMapInputMode.TARGET.equals(i.getMode()))
+				.map(StructureMap.StructureMapGroupInputComponent::getName)
+				.findFirst().orElse("");
+
+			result.addParameter(new Parameters.ParametersParameterComponent()
+				.setName(outputName)
+				.setResource(new Binary()
+					.setContentType(getContentType("application/fhir+json"))
+					.setContentAsBase64(
+						Base64.getEncoder().encodeToString(outputContent.getBytes(StandardCharsets.UTF_8)))));
+		} else {
+			for (StructureMap.StructureMapGroupComponent group : resolved.getGroup()) {
+				Variables variables = new Variables();
+
+				for (StructureMap.StructureMapGroupInputComponent input : group.getInput()) {
+					String inputName = input.getName();
+
+					Binary parameter = (Binary) parameters.getParameter("input").getPart().stream()
 						.filter(p -> inputName.equals(p.getName()))
 						.findFirst()
 						.map(p -> p.getResource())
 						.orElse(null);
 
-				if (parameter == null && StructureMap.StructureMapInputMode.SOURCE.equals(input.getMode())) {
-					throw new InvalidRequestException(
+					if (parameter == null && StructureMap.StructureMapInputMode.SOURCE.equals(input.getMode())) {
+						throw new InvalidRequestException(
 							String.format("Missing input named '%s' in parameters !", inputName));
-				}
+					}
 
-				if (parameter != null) {
-					Object parsedObject = parseInput(parameter, input.getType());
-					variables.add(
+					if (parameter != null) {
+						Object parsedObject = parseInput(parameter, input.getType());
+						variables.add(
 							input.getMode().equals(StructureMap.StructureMapInputMode.SOURCE) ? INPUT : OUTPUT,
 							inputName,
 							parsedObject);
-				} else if (StructureMap.StructureMapInputMode.TARGET.equals(input.getMode())) {
-					variables.add(OUTPUT, inputName, createEmptyOutput(input.getType()));
+					} else if (StructureMap.StructureMapInputMode.TARGET.equals(input.getMode())) {
+						variables.add(OUTPUT, inputName, createEmptyOutput(input.getType()));
+					}
 				}
-			}
 
-			executeGroup(new MappingContext(resolved, group, variables), true);
+				executeGroup(new MappingContext(resolved, group, variables), true);
 
-			variables.getOutputs().stream().forEach(v -> {
-				String type = group.getInput().stream()
+				variables.getOutputs().stream().forEach(v -> {
+					String type = group.getInput().stream()
 						.filter(i -> i.getName().equals(v.getName()))
 						.map(StructureMap.StructureMapGroupInputComponent::getType)
 						.findFirst()
 						.orElse("Resource");
 
-				result.addParameter(new Parameters.ParametersParameterComponent()
+					result.addParameter(new Parameters.ParametersParameterComponent()
 						.setName(v.getName())
 						.setResource(new Binary()
-								.setContentType(getContentType(type))
-								.setContentAsBase64(
-										Base64.getEncoder().encodeToString(serializeObject(v.getObject(), type)))));
-			});
+							.setContentType(getContentType(type))
+							.setContentAsBase64(
+								Base64.getEncoder().encodeToString(serializeObject(v.getObject(), type)))));
+				});
+			}
 		}
+
 		return result;
 	}
 
@@ -185,6 +235,94 @@ public class Mapper {
 				IParser parser = FhirContext.forCached(R4).newJsonParser();
 				return parser.parseResource(stringContent);
 		}
+	}
+
+	private boolean isFhirToFhir(StructureMap.StructureMapGroupComponent group) {
+		//For now, only return true if transform has exactly one input and one output
+		List<StructureMap.StructureMapGroupInputComponent> inputs = group.getInput().stream()
+			.filter(i -> StructureMap.StructureMapInputMode.SOURCE.equals(i.getMode()))
+			.toList();
+		List<StructureMap.StructureMapGroupInputComponent> outputs = group.getInput().stream()
+			.filter(i -> StructureMap.StructureMapInputMode.TARGET.equals(i.getMode()))
+			.toList();
+
+		if (inputs.size() != 1 || outputs.size() != 1) {
+			return false;
+		}
+
+		String inputType = inputs.stream()
+			.map(StructureMap.StructureMapGroupInputComponent::getType)
+			.findFirst().orElse("");
+
+
+		String outputType = outputs.stream()
+			.map(StructureMap.StructureMapGroupInputComponent::getType)
+			.findFirst().orElse("");
+
+		switch (inputType) {
+			case "CSV":
+			case "JSON":
+			case "HL7v2":
+			case "HPRIM":
+			case "XML":
+				return false;
+			default:
+				break;
+		}
+        return switch (outputType) {
+            case "CSV", "JSON", "HL7v2", "HPRIM", "XML" -> false;
+            default -> true;
+        };
+	}
+
+	private boolean isCDAToFhir(StructureMap.StructureMapGroupComponent group) {
+		//For now, only return true if transform has exactly one input and one output
+		List<StructureMap.StructureMapGroupInputComponent> inputs = group.getInput().stream()
+			.filter(i -> StructureMap.StructureMapInputMode.SOURCE.equals(i.getMode()))
+			.toList();
+		List<StructureMap.StructureMapGroupInputComponent> outputs = group.getInput().stream()
+			.filter(i -> StructureMap.StructureMapInputMode.TARGET.equals(i.getMode()))
+			.toList();
+
+		if (inputs.size() != 1 || outputs.size() != 1) {
+			return false;
+		}
+
+		String inputType = inputs.stream()
+			.map(StructureMap.StructureMapGroupInputComponent::getType)
+			.findFirst().orElse("");
+
+
+		String outputType = outputs.stream()
+			.map(StructureMap.StructureMapGroupInputComponent::getType)
+			.findFirst().orElse("");
+
+		return inputType.equals("ClinicalDocument");
+    }
+
+	private boolean isFhirToCda(StructureMap.StructureMapGroupComponent group) {
+		//For now, only return true if transform has exactly one input and one output
+		List<StructureMap.StructureMapGroupInputComponent> inputs = group.getInput().stream()
+			.filter(i -> StructureMap.StructureMapInputMode.SOURCE.equals(i.getMode()))
+			.toList();
+		List<StructureMap.StructureMapGroupInputComponent> outputs = group.getInput().stream()
+			.filter(i -> StructureMap.StructureMapInputMode.TARGET.equals(i.getMode()))
+			.toList();
+
+		if (inputs.size() != 1 || outputs.size() != 1) {
+			return false;
+		}
+
+		String inputType = inputs.stream()
+			.map(StructureMap.StructureMapGroupInputComponent::getType)
+			.findFirst().orElse("");
+
+
+		String outputType = outputs.stream()
+			.map(StructureMap.StructureMapGroupInputComponent::getType)
+			.findFirst().orElse("");
+
+		return outputType.equals("ClinicalDocument");
 	}
 
 	private Object createEmptyOutput(String type) {
@@ -2702,7 +2840,7 @@ public class Mapper {
 	 * Resolves and merges all imports for a given StructureMap.
 	 * Supports recursive imports and conflict resolution (local overrides imported).
 	 */
-	StructureMap resolveImports(StructureMap original, Set<String> visited) {
+	StructureMap resolveImports(StructureMap original, Set<String> visited, List<StructureMap> importedMaps) {
 		if (original == null || original.getUrl() == null || original.getUrl().isEmpty()) {
 			throw new InvalidRequestException("StructureMap URL cannot be null");
 		}
@@ -2716,15 +2854,28 @@ public class Mapper {
 
 		for (UriType importUrl : original.getImport()) {
 			String importCanonical = importUrl.getValue();
-			StructureMap importedMap = fetchStructureMapByUrl(importCanonical);
 
-			if (importedMap == null) {
+			if (visited.contains(importCanonical)) {
+				continue;
+			} else if (structureMapResolver.containsWildcard(importCanonical)) {
+				visited.add(importCanonical);
+			}
+			List<StructureMap> fetchedMaps = structureMapResolver.fetchStructureMapByUrl(importCanonical);
+
+			if (fetchedMaps == null) {
 				throw new InvalidRequestException("Unable to find imported StructureMap: " + importCanonical);
 			}
 
-			importedMap = resolveImports(importedMap, visited);
+			for (StructureMap fetchedMap : fetchedMaps) {
+				if (!fetchedMap.getUrl().equals(original.getUrl()) && !visited.contains(fetchedMap.getUrl())) {
+					importedMaps.add(fetchedMap);
 
-			mergeStructureMaps(resolvedMap, importedMap);
+					fetchedMap = resolveImports(fetchedMap, visited, importedMaps);
+
+					visited.add(fetchedMap.getUrl());
+					mergeStructureMaps(resolvedMap, fetchedMap);
+				}
+			}
 		}
 		return resolvedMap;
 	}
