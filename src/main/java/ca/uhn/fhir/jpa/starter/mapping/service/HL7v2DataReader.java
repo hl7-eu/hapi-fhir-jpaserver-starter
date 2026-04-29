@@ -29,7 +29,9 @@ public class HL7v2DataReader {
 		try (HapiContext context = new DefaultHapiContext()) {
 			Parser parser = context.getGenericParser();
 			String hl7v2Content = new String(Base64.getDecoder().decode(content), StandardCharsets.UTF_8);
-			return parser.parse(hl7v2Content);
+			Message msg = parser.parse(hl7v2Content);
+			logger.info("HL7v2 parsed class = {}", msg.getClass().getName());
+			return msg;
 		} catch (IOException e) {
 			logger.error("Error while creating context for HL7v2 parsing !", e);
 			throw new InternalErrorException("Error while creating context for HL7v2 parsing !");

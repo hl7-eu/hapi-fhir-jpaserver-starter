@@ -206,4 +206,102 @@ class PathTest {
 	void testInvalidGroupRepetition() {
 		assertThrows(HL7Exception.class, () -> new Path("PATIENT[x].PID-3"));
 	}
+
+	@Test
+	void testGroupOnlySimple() throws HL7Exception {
+		Path path = new Path("PATIENT.VISIT");
+
+		assertTrue(path.isGroupOnly());
+		assertFalse(path.hasSegment());
+
+		assertEquals(List.of("PATIENT"), path.getGroups());
+		assertEquals(1, path.getGroupRepetitions().size());
+		assertNull(path.getGroupRepetitions().get(0));
+
+		assertNull(path.getSegment());
+		assertNull(path.getSegmentRepetition());
+
+		assertEquals("VISIT", path.getTerminalGroup());
+		assertNull(path.getTerminalGroupRepetition());
+
+		assertNull(path.getField());
+		assertNull(path.getFieldRepetition());
+		assertNull(path.getComponent());
+		assertNull(path.getSubComponent());
+	}
+
+	@Test
+	void testGroupOnlyWithRepetitions() throws HL7Exception {
+		Path path = new Path("PATIENT[1].VISIT[2]");
+
+		assertTrue(path.isGroupOnly());
+		assertFalse(path.hasSegment());
+
+		assertEquals(List.of("PATIENT"), path.getGroups());
+		assertEquals(List.of(1), path.getGroupRepetitions());
+
+		assertNull(path.getSegment());
+		assertNull(path.getSegmentRepetition());
+
+		assertEquals("VISIT", path.getTerminalGroup());
+		assertEquals(2, path.getTerminalGroupRepetition());
+
+		assertNull(path.getField());
+		assertNull(path.getFieldRepetition());
+		assertNull(path.getComponent());
+		assertNull(path.getSubComponent());
+	}
+
+	@Test
+	void testGroupOnlyNested() throws HL7Exception {
+		Path path = new Path("RESOURCES.GENERAL_RESOURCES.RESULT");
+
+		assertTrue(path.isGroupOnly());
+		assertFalse(path.hasSegment());
+
+		assertEquals(List.of("RESOURCES", "GENERAL_RESOURCES"), path.getGroups());
+		assertEquals(2, path.getGroupRepetitions().size());
+		assertNull(path.getGroupRepetitions().get(0));
+		assertNull(path.getGroupRepetitions().get(1));
+
+		assertNull(path.getSegment());
+		assertNull(path.getSegmentRepetition());
+
+		assertEquals("RESULT", path.getTerminalGroup());
+		assertNull(path.getTerminalGroupRepetition());
+
+		assertNull(path.getField());
+		assertNull(path.getFieldRepetition());
+		assertNull(path.getComponent());
+		assertNull(path.getSubComponent());
+	}
+
+	@Test
+	void testGroupOnlyInvalidSingleToken() {
+		assertThrows(HL7Exception.class, () -> new Path("VISIT"));
+	}
+
+	@Test
+	void testIsGroupOnlyFalseWhenHasSegment() throws HL7Exception {
+		Path path = new Path("PATIENT.PID-3");
+
+		assertFalse(path.isGroupOnly());
+		assertTrue(path.hasSegment());
+	}
+
+	@Test
+	void testHasSegmentFalseForGroupOnly() throws HL7Exception {
+		Path path = new Path("PATIENT.VISIT");
+
+		assertFalse(path.hasSegment());
+		assertTrue(path.isGroupOnly());
+	}
+
+	@Test
+	void testGetTerminalGroupNullWhenHasSegment() throws HL7Exception {
+		Path path = new Path("PATIENT.PID-3");
+
+		assertNull(path.getTerminalGroup());
+		assertNull(path.getTerminalGroupRepetition());
+	}
 }
