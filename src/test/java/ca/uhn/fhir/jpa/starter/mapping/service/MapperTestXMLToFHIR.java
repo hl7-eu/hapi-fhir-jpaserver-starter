@@ -37,7 +37,7 @@ class MapperTestXMLToFHIR {
         FHIRPathEngine fhirPathEngine = new FHIRPathEngine(hapiContext);
 
 		  IGenericClient clientStructureMap = null;
-        Mapper mapper = new Mapper(hapiContext, fhirPathEngine, null, structureMapDao, clientStructureMap);
+        Mapper mapper = new Mapper(hapiContext, fhirPathEngine, null, structureMapDao, clientStructureMap, null);
 
         Parameters.ParametersParameterComponent param = new Parameters.ParametersParameterComponent();
         param.setName("input");
@@ -73,7 +73,7 @@ class MapperTestXMLToFHIR {
         StructureMap structureMap = new StructureMap();
 		  structureMap.setUrl("http://example.org/base");
 
-        StructureMap.StructureMapGroupComponent group = structureMap.addGroup();
+        StructureMap.StructureMapGroupComponent group = structureMap.addGroup().setName("main");
         group.addInput().setName("source").setType("XML").setMode(StructureMap.StructureMapInputMode.SOURCE);
         group.addInput().setName("target").setType("Questionnaire").setMode(StructureMap.StructureMapInputMode.TARGET);
 

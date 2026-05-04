@@ -38,7 +38,7 @@ class MapperTestCSVToFHIR {
         FHIRPathEngine fhirPathEngine = new FHIRPathEngine(hapiContext);
 
 		  IGenericClient clientStructureMap = null;
-        Mapper mapper = new Mapper(hapiContext, fhirPathEngine, null, structureMapDao, clientStructureMap);
+        Mapper mapper = new Mapper(hapiContext, fhirPathEngine, null, structureMapDao, clientStructureMap, null);
 
         Parameters.ParametersParameterComponent param = new Parameters.ParametersParameterComponent();
         param.setName("input");
@@ -69,7 +69,7 @@ class MapperTestCSVToFHIR {
         StructureMap structureMap = new StructureMap();
 		  structureMap.setUrl("http://example.org/base");
 
-        StructureMap.StructureMapGroupComponent group = structureMap.addGroup();
+        StructureMap.StructureMapGroupComponent group = structureMap.addGroup().setName("main");
         group.addInput().setName("source").setType("CSV").setMode(StructureMap.StructureMapInputMode.SOURCE);
         group.addInput().setName("target").setType("Patient").setMode(StructureMap.StructureMapInputMode.TARGET);
 

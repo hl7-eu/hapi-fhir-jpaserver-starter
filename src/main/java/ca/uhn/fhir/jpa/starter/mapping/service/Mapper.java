@@ -94,24 +94,31 @@ public class Mapper {
 	private final StructureMapUtilities.ITransformerServices services;
 	private final IFhirResourceDao<StructureMap> structureMapDao;
 	private final IGenericClient clientStructureMap;
+	private final MatchboxTransformService matchboxTransformService;
+	private final StructureMapResolver structureMapResolver;
 
 	public Mapper(
 			IWorkerContext worker,
 			FHIRPathEngine fhirPathEngine,
 			StructureMapUtilities.ITransformerServices services,
 			IFhirResourceDao<StructureMap> structureMapDao,
-			IGenericClient clientStructureMap) {
+			IGenericClient clientStructureMap,
+			MatchboxTransformService matchboxTransformService) {
 		this.worker = worker;
 		this.fhirPathEngine = fhirPathEngine;
 		this.services = services;
 		this.structureMapDao = structureMapDao;
 		this.clientStructureMap = clientStructureMap;
+		this.matchboxTransformService = matchboxTransformService;
+		this.structureMapResolver = new StructureMapResolver(clientStructureMap, structureMapDao);
 	}
 
 	public Parameters map(StructureMap structureMap, Parameters parameters) {
 		logger.info("Start Mapping using map : " + structureMap.getUrl());
 
-		StructureMap resolved = resolveImports(structureMap, new HashSet<>());
+		List<StructureMap> importedMaps = new ArrayList<>();
+
+		StructureMap resolved = resolveImports(structureMap, new HashSet<>(), importedMaps);
 
 		if (resolved.getGroup().isEmpty()) {
 			throw new InvalidRequestException("StructureMap.group is required !");
@@ -119,51 +126,97 @@ public class Mapper {
 
 		Parameters result = new Parameters();
 
-		for (StructureMap.StructureMapGroupComponent group : resolved.getGroup()) {
-			Variables variables = new Variables();
+		StructureMap.StructureMapGroupComponent firstGroup =
+				structureMap.getGroup().getFirst();
 
-			for (StructureMap.StructureMapGroupInputComponent input : group.getInput()) {
-				String inputName = input.getName();
+		boolean isCDAToFhir = isCDAToFhir(firstGroup);
+		boolean isFhirToCda = isFhirToCda(firstGroup);
+		if (isCDAToFhir || isFhirToCda || isFhirToFhir(firstGroup)) {
+			// TODO update how input are parsed
+			// TODO See for multiple inputs ?
+			String inputContent = firstGroup.getInput().stream()
+					.filter(i -> StructureMap.StructureMapInputMode.SOURCE.equals(i.getMode()))
+					.map(StructureMap.StructureMapGroupInputComponent::getName)
+					.map(name -> {
+						Binary parameter = (Binary) parameters.getParameter("input").getPart().stream()
+								.filter(p -> name.equals(p.getName()))
+								.findFirst()
+								.map(Parameters.ParametersParameterComponent::getResource)
+								.orElse(null);
+						return new String(
+								Base64.getDecoder().decode(parameter.getContentAsBase64()), StandardCharsets.UTF_8);
+					})
+					.findFirst()
+					.orElse("");
 
-				Binary parameter = (Binary) parameters.getParameter("input").getPart().stream()
-						.filter(p -> inputName.equals(p.getName()))
-						.findFirst()
-						.map(p -> p.getResource())
-						.orElse(null);
+			String outputContent =
+					matchboxTransformService.transform(structureMap, importedMaps, null, inputContent, !isFhirToCda);
 
-				if (parameter == null && StructureMap.StructureMapInputMode.SOURCE.equals(input.getMode())) {
-					throw new InvalidRequestException(
-							String.format("Missing input named '%s' in parameters !", inputName));
+			// TODO See for multiple outputs ?
+			String outputName = firstGroup.getInput().stream()
+					.filter(i -> StructureMap.StructureMapInputMode.TARGET.equals(i.getMode()))
+					.map(StructureMap.StructureMapGroupInputComponent::getName)
+					.findFirst()
+					.orElse("");
+
+			result.addParameter(new Parameters.ParametersParameterComponent()
+					.setName(outputName)
+					.setResource(new Binary()
+							.setContentType(getContentType("application/fhir+json"))
+							.setContentAsBase64(Base64.getEncoder()
+									.encodeToString(outputContent.getBytes(StandardCharsets.UTF_8)))));
+		} else {
+			List<StructureMap.StructureMapGroupComponent> groups = resolved.getGroup().stream()
+					.filter(g -> structureMap.getGroup().stream()
+							.anyMatch(g2 -> g.getName().equals(g2.getName())))
+					.toList();
+			for (StructureMap.StructureMapGroupComponent group : groups) {
+				Variables variables = new Variables();
+
+				for (StructureMap.StructureMapGroupInputComponent input : group.getInput()) {
+					String inputName = input.getName();
+
+					Binary parameter = (Binary) parameters.getParameter("input").getPart().stream()
+							.filter(p -> inputName.equals(p.getName()))
+							.findFirst()
+							.map(p -> p.getResource())
+							.orElse(null);
+
+					if (parameter == null && StructureMap.StructureMapInputMode.SOURCE.equals(input.getMode())) {
+						throw new InvalidRequestException(
+								String.format("Missing input named '%s' in parameters !", inputName));
+					}
+
+					if (parameter != null) {
+						Object parsedObject = parseInput(parameter, input.getType());
+						variables.add(
+								input.getMode().equals(StructureMap.StructureMapInputMode.SOURCE) ? INPUT : OUTPUT,
+								inputName,
+								parsedObject);
+					} else if (StructureMap.StructureMapInputMode.TARGET.equals(input.getMode())) {
+						variables.add(OUTPUT, inputName, createEmptyOutput(input.getType()));
+					}
 				}
 
-				if (parameter != null) {
-					Object parsedObject = parseInput(parameter, input.getType());
-					variables.add(
-							input.getMode().equals(StructureMap.StructureMapInputMode.SOURCE) ? INPUT : OUTPUT,
-							inputName,
-							parsedObject);
-				} else if (StructureMap.StructureMapInputMode.TARGET.equals(input.getMode())) {
-					variables.add(OUTPUT, inputName, createEmptyOutput(input.getType()));
-				}
+				executeGroup(new MappingContext(resolved, group, variables), true);
+
+				variables.getOutputs().stream().forEach(v -> {
+					String type = group.getInput().stream()
+							.filter(i -> i.getName().equals(v.getName()))
+							.map(StructureMap.StructureMapGroupInputComponent::getType)
+							.findFirst()
+							.orElse("Resource");
+
+					result.addParameter(new Parameters.ParametersParameterComponent()
+							.setName(v.getName())
+							.setResource(new Binary()
+									.setContentType(getContentType(type))
+									.setContentAsBase64(
+											Base64.getEncoder().encodeToString(serializeObject(v.getObject(), type)))));
+				});
 			}
-
-			executeGroup(new MappingContext(resolved, group, variables), true);
-
-			variables.getOutputs().stream().forEach(v -> {
-				String type = group.getInput().stream()
-						.filter(i -> i.getName().equals(v.getName()))
-						.map(StructureMap.StructureMapGroupInputComponent::getType)
-						.findFirst()
-						.orElse("Resource");
-
-				result.addParameter(new Parameters.ParametersParameterComponent()
-						.setName(v.getName())
-						.setResource(new Binary()
-								.setContentType(getContentType(type))
-								.setContentAsBase64(
-										Base64.getEncoder().encodeToString(serializeObject(v.getObject(), type)))));
-			});
 		}
+
 		return result;
 	}
 
@@ -185,6 +238,97 @@ public class Mapper {
 				IParser parser = FhirContext.forCached(R4).newJsonParser();
 				return parser.parseResource(stringContent);
 		}
+	}
+
+	private boolean isFhirToFhir(StructureMap.StructureMapGroupComponent group) {
+		// For now, only return true if transform has exactly one input and one output
+		List<StructureMap.StructureMapGroupInputComponent> inputs = group.getInput().stream()
+				.filter(i -> StructureMap.StructureMapInputMode.SOURCE.equals(i.getMode()))
+				.toList();
+		List<StructureMap.StructureMapGroupInputComponent> outputs = group.getInput().stream()
+				.filter(i -> StructureMap.StructureMapInputMode.TARGET.equals(i.getMode()))
+				.toList();
+
+		if (inputs.size() != 1 || outputs.size() != 1) {
+			return false;
+		}
+
+		String inputType = inputs.stream()
+				.map(StructureMap.StructureMapGroupInputComponent::getType)
+				.findFirst()
+				.orElse("");
+
+		String outputType = outputs.stream()
+				.map(StructureMap.StructureMapGroupInputComponent::getType)
+				.findFirst()
+				.orElse("");
+
+		switch (inputType) {
+			case "CSV":
+			case "JSON":
+			case "HL7v2":
+			case "HPRIM":
+			case "XML":
+				return false;
+			default:
+				break;
+		}
+		return switch (outputType) {
+			case "CSV", "JSON", "HL7v2", "HPRIM", "XML" -> false;
+			default -> true;
+		};
+	}
+
+	private boolean isCDAToFhir(StructureMap.StructureMapGroupComponent group) {
+		// For now, only return true if transform has exactly one input and one output
+		List<StructureMap.StructureMapGroupInputComponent> inputs = group.getInput().stream()
+				.filter(i -> StructureMap.StructureMapInputMode.SOURCE.equals(i.getMode()))
+				.toList();
+		List<StructureMap.StructureMapGroupInputComponent> outputs = group.getInput().stream()
+				.filter(i -> StructureMap.StructureMapInputMode.TARGET.equals(i.getMode()))
+				.toList();
+
+		if (inputs.size() != 1 || outputs.size() != 1) {
+			return false;
+		}
+
+		String inputType = inputs.stream()
+				.map(StructureMap.StructureMapGroupInputComponent::getType)
+				.findFirst()
+				.orElse("");
+
+		String outputType = outputs.stream()
+				.map(StructureMap.StructureMapGroupInputComponent::getType)
+				.findFirst()
+				.orElse("");
+
+		return inputType.equals("ClinicalDocument");
+	}
+
+	private boolean isFhirToCda(StructureMap.StructureMapGroupComponent group) {
+		// For now, only return true if transform has exactly one input and one output
+		List<StructureMap.StructureMapGroupInputComponent> inputs = group.getInput().stream()
+				.filter(i -> StructureMap.StructureMapInputMode.SOURCE.equals(i.getMode()))
+				.toList();
+		List<StructureMap.StructureMapGroupInputComponent> outputs = group.getInput().stream()
+				.filter(i -> StructureMap.StructureMapInputMode.TARGET.equals(i.getMode()))
+				.toList();
+
+		if (inputs.size() != 1 || outputs.size() != 1) {
+			return false;
+		}
+
+		String inputType = inputs.stream()
+				.map(StructureMap.StructureMapGroupInputComponent::getType)
+				.findFirst()
+				.orElse("");
+
+		String outputType = outputs.stream()
+				.map(StructureMap.StructureMapGroupInputComponent::getType)
+				.findFirst()
+				.orElse("");
+
+		return outputType.equals("ClinicalDocument");
 	}
 
 	private Object createEmptyOutput(String type) {
@@ -371,8 +515,24 @@ public class Mapper {
 				.filter(input -> sourceContext.equals(input.getName()))
 				.map(StructureMap.StructureMapGroupInputComponent::getType)
 				.findFirst()
-				.orElse(context.getGroup().getInput().get(0).getType());
-		// .orElse("Resource");
+				.orElseGet(() -> {
+					Object source = localVariables.get(INPUT, sourceContext);
+					if (source == null) {
+						source = localVariables.get(OUTPUT, sourceContext);
+					}
+
+					if (source instanceof Structure) {
+						return "HL7v2";
+					} else if (source instanceof CSVRecords || source instanceof CSVRecord) {
+						return "CSV";
+					} else if (source instanceof HPRIMMessage || source instanceof HPRIMSegment) {
+						return "HPRIM";
+					} else if (source instanceof JSONObject) {
+						return "JSON"; // XML Works the same
+					} else {
+						return "DEFAULT";
+					}
+				});
 
 		switch (type) {
 			case "CSV":
@@ -582,7 +742,9 @@ public class Mapper {
 		// Only message or can it be segments ?
 		if (sourceObject instanceof Message) {
 			items = processHL7v2Object(context, sourceObject);
-		} else if (sourceObject instanceof GenericSegment) {
+		} else if (sourceObject instanceof Group) {
+			items = processHL7v2Object(context, sourceObject);
+		} else if (sourceObject instanceof Segment || sourceObject instanceof GenericSegment) {
 			items = processHL7v2Object(context, sourceObject);
 		} else {
 			items = new ArrayList<>();
@@ -920,88 +1082,150 @@ public class Mapper {
 			try {
 				Path path = new Path(elementName);
 
-				List<GenericSegment> segments;
-				if (hl7v2Object instanceof Message) {
-					segments = findSegments((Message) hl7v2Object, path);
+				// 1) Path to a group
+				if (path.isGroupOnly()) {
+					List<Group> groups = new ArrayList<>();
+
+					if (hl7v2Object instanceof Message msg) {
+						groups.addAll(findGroups(msg, path));
+					} else if (hl7v2Object instanceof Group group) {
+						groups.addAll(findGroups(group, path));
+					} else {
+						logger.info(
+								"Group-only path {} cannot be applied to {}",
+								elementName,
+								hl7v2Object.getClass().getName());
+					}
+
+					items.addAll(groups);
+					continue;
+				}
+
+				// 2) Path to a segment
+				List<GenericSegment> segments = new ArrayList<>();
+
+				if (hl7v2Object instanceof Message msg) {
+					segments = findSegments(msg, path);
+				} else if (hl7v2Object instanceof Group group) {
+					segments = findSegments(group, path);
 				} else {
 					segments = List.of(toGenericSegment(hl7v2Object));
 				}
 
 				if (path.getField() == null) {
 					items.addAll(segments);
+					continue;
+				}
+
+				if (segments.isEmpty()) {
+					logger.info("Field not found in HL7v2 source : {}", source.getElement());
+					continue;
+				}
+
+				List<Varies> fields;
+				if (path.getFieldRepetition() != null) {
+					fields = List.of((Varies) segments.get(0).getField(path.getField(), path.getFieldRepetition()));
 				} else {
-					List<Varies> fields;
-					if (path.getFieldRepetition() != null) {
-						fields = List.of((Varies) segments.get(0).getField(path.getField(), path.getFieldRepetition()));
-					} else {
-						fields = Arrays.stream(segments.get(0).getField(path.getField()))
-								.map(t -> (Varies) t)
-								.collect(Collectors.toList());
-					}
+					fields = Arrays.stream(segments.get(0).getField(path.getField()))
+							.map(t -> (Varies) t)
+							.collect(Collectors.toList());
+				}
 
-					String elementStringValue = null;
+				String elementStringValue = null;
 
-					if (!fields.isEmpty()) {
-						if (path.getComponent() != null) {
-							ca.uhn.hl7v2.model.Type data = fields.get(0).getData();
-							// Data is composite
-							if (data instanceof GenericComposite) {
-								GenericComposite fieldData = (GenericComposite) data;
-								Varies component = (Varies) fieldData.getComponent(path.getComponent());
-								if (path.getSubComponent() != null) {
-									GenericComposite componentData = (GenericComposite) component.getData();
-									Varies subComponent = (Varies) componentData.getComponent(path.getSubComponent());
-									elementStringValue = subComponent.getData().toString();
-								} else {
-									elementStringValue = component.getData().toString();
-								}
+				if (!fields.isEmpty()) {
+					if (path.getComponent() != null) {
+						ca.uhn.hl7v2.model.Type data = fields.get(0).getData();
+						// Data is composite
+						if (data instanceof GenericComposite) {
+							GenericComposite fieldData = (GenericComposite) data;
+							Varies component = (Varies) fieldData.getComponent(path.getComponent());
+							if (path.getSubComponent() != null) {
+								GenericComposite componentData = (GenericComposite) component.getData();
+								Varies subComponent = (Varies) componentData.getComponent(path.getSubComponent());
+								elementStringValue = subComponent.getData().toString();
+							} else {
+								elementStringValue = component.getData().toString();
 							}
 							// Data is not composite (primitive)
-							else {
-								// Check we are not looking for anything other than the first component (no other
-								// component, no sub-component)
-								if (path.getComponent() != null
-										&& path.getComponent() == 0
-										&& path.getSubComponent() == null) {
-									elementStringValue = data.toString();
-								}
-								// Otherwise, we don't set the value and will log as not found
-							}
 						} else {
-							elementStringValue = fields.get(0).getData().toString();
+							// Check we are not looking for anything other than the first component (no other
+							// component, no sub-component)
+							if (path.getComponent() != null
+									&& path.getComponent() == 0
+									&& path.getSubComponent() == null) {
+								elementStringValue = data.toString();
+							}
+							// Otherwise, we don't set the value and will log as not found
 						}
-					}
-
-					if (elementStringValue != null) {
-						item = getFHIRItem(elementStringValue, source.getType());
-					} else if (source.hasDefaultValue()
-							&& source.getType().equals(source.getDefaultValue().fhirType())) {
-						item = source.getDefaultValue();
-					} else if (source.hasDefaultValue()
-							&& !source.getType().equals(source.getDefaultValue().fhirType())) {
-						throw new InvalidRequestException(String.format(
-								"Default value type does not match in %s for rule %s source %s !",
-								context.getStructureMap().getUrl(),
-								context.getRule().getName(),
-								source.getContext()));
-					}
-
-					if (item != null) {
-						checkValues(source, List.of(item), context.getRule().getName());
-						if (!matchesCondition(source, item, context.getVariables())) {
-							skip = true;
-							break;
-						}
-						items.add(item);
 					} else {
-						logger.info("Field not found in HL7v2 source : " + source.getElement());
+						elementStringValue = fields.get(0).getData().toString();
 					}
+				}
+
+				if (elementStringValue != null) {
+					item = getFHIRItem(elementStringValue, source.getType());
+				} else if (source.hasDefaultValue()
+						&& source.getType().equals(source.getDefaultValue().fhirType())) {
+					item = source.getDefaultValue();
+				} else if (source.hasDefaultValue()
+						&& !source.getType().equals(source.getDefaultValue().fhirType())) {
+					throw new InvalidRequestException(String.format(
+							"Default value type does not match in %s for rule %s source %s !",
+							context.getStructureMap().getUrl(),
+							context.getRule().getName(),
+							source.getContext()));
+				}
+
+				if (item != null) {
+					checkValues(source, List.of(item), context.getRule().getName());
+					if (!matchesCondition(source, item, context.getVariables())) {
+						skip = true;
+						break;
+					}
+					items.add(item);
+				} else {
+					logger.info("Field not found in HL7v2 source : {}", source.getElement());
 				}
 			} catch (ClassCastException | HL7Exception e) {
 				logger.info("Field not found in HL7v2 source: " + elementName, e);
 			}
 		}
+
 		return skip ? new ArrayList<>() : items;
+	}
+
+	private List<Group> findGroups(Message msg, Path path) {
+		return findGroups((Group) msg, path);
+	}
+
+	private List<Group> findGroups(Group root, Path path) {
+		List<Group> currentGroups = new ArrayList<>();
+		currentGroups.add(root);
+
+		List<String> groups = path.getGroups();
+		List<Integer> reps = path.getGroupRepetitions();
+
+		for (int i = 0; i < groups.size(); i++) {
+			String groupName = groups.get(i);
+			Integer rep = reps.get(i);
+
+			List<Group> nextGroups = new ArrayList<>();
+			for (Group group : currentGroups) {
+				nextGroups.addAll(getGroupsByName(group, groupName, rep));
+			}
+			currentGroups = nextGroups;
+		}
+
+		if (!path.isGroupOnly()) {
+			return currentGroups;
+		}
+
+		List<Group> result = new ArrayList<>();
+		for (Group group : currentGroups) {
+			result.addAll(getGroupsByName(group, path.getTerminalGroup(), path.getTerminalGroupRepetition()));
+		}
+		return result;
 	}
 
 	private String normalizeSegmentName(String name) {
@@ -1094,6 +1318,51 @@ public class Mapper {
 
 		if (result.isEmpty()) {
 			result.addAll(scanGroupsRecursively(msg, path));
+		}
+
+		return result;
+	}
+
+	private List<GenericSegment> findSegments(Group root, Path path) throws HL7Exception {
+		List<GenericSegment> result = new ArrayList<>();
+
+		List<Group> currentGroups = new ArrayList<>();
+		currentGroups.add(root);
+
+		List<String> groups = path.getGroups();
+		List<Integer> groupReps = path.getGroupRepetitions();
+
+		for (int i = 0; i < groups.size(); i++) {
+			String groupName = groups.get(i);
+			Integer rep = groupReps.get(i);
+
+			List<Group> nextGroups = new ArrayList<>();
+			for (Group group : currentGroups) {
+				nextGroups.addAll(getGroupsByName(group, groupName, rep));
+			}
+			currentGroups = nextGroups;
+		}
+
+		for (Group group : currentGroups) {
+			for (String name : group.getNames()) {
+				if (!normalizeSegmentName(name).equalsIgnoreCase(normalizeSegmentName(path.getSegment()))) {
+					continue;
+				}
+
+				try {
+					Structure[] segs = group.getAll(name);
+					for (int i = 0; i < segs.length; i++) {
+						if (path.getSegmentRepetition() == null || i == path.getSegmentRepetition()) {
+							result.add(toGenericSegment(segs[i]));
+						}
+					}
+				} catch (HL7Exception ignored) {
+				}
+			}
+		}
+
+		if (result.isEmpty()) {
+			result.addAll(scanGroupsRecursively(root, path));
 		}
 
 		return result;
@@ -1643,28 +1912,66 @@ public class Mapper {
 							context.getVariables(),
 							context.getTarget().getParameter().get(1),
 							context.getTarget().toString());
-					String outputFormatOrType =
-							(context.getTarget().getParameter().size() > 2)
-									? getParamStringNoNull(
-											context.getVariables(),
-											context.getTarget().getParameter().get(2),
-											context.getTarget().toString())
-									: null;
 
-					boolean forceInstant =
-							outputFormatOrType != null && "instant".equalsIgnoreCase(outputFormatOrType.trim());
-					boolean forceTime =
-							outputFormatOrType != null && "time".equalsIgnoreCase(outputFormatOrType.trim());
-
-					DateTimeFormatter outputFormatter = (!forceInstant && !forceTime && outputFormatOrType != null)
-							? DateTimeFormatter.ofPattern(outputFormatOrType)
+					String param2 = (context.getTarget().getParameter().size() > 2)
+							? getParamStringNoNull(
+									context.getVariables(),
+									context.getTarget().getParameter().get(2),
+									context.getTarget().toString())
 							: null;
 
+					String param3 = (context.getTarget().getParameter().size() > 3)
+							? getParamStringNoNull(
+									context.getVariables(),
+									context.getTarget().getParameter().get(3),
+									context.getTarget().toString())
+							: null;
+
+					String normalizedDateSource = normalize(dateSource);
+					inputFormat = normalize(inputFormat);
+
+					if (inputFormat.length() > normalizedDateSource.length()) {
+						logger.warn(String.format(
+								"Date format [%s] longer then actual date [%s], will try to complete string",
+								inputFormat, normalizedDateSource));
+						normalizedDateSource =
+								normalizedDateSource + "0".repeat(inputFormat.length() - normalizedDateSource.length());
+					}
+
+					param2 = normalize(param2);
+					param3 = normalize(param3);
+
+					boolean p2IsMode = isMode(param2);
+					boolean p3IsMode = isMode(param3);
+
+					String mode = null;
+					String outputPattern = null;
+
+					if (p2IsMode) {
+						mode = param2;
+						if (param3 != null && !p3IsMode) outputPattern = param3;
+					} else {
+						outputPattern = param2;
+						if (p3IsMode) mode = param3;
+					}
+
+					boolean forceInstant = "instant".equalsIgnoreCase(mode);
+					boolean forceTime = "time".equalsIgnoreCase(mode);
+					boolean forceNoFhir = "nofhir".equalsIgnoreCase(mode);
+
 					DateTimeFormatter inputFormatter = DateTimeFormatter.ofPattern(inputFormat);
+					DateTimeFormatter outputFormatter =
+							(outputPattern != null) ? DateTimeFormatter.ofPattern(outputPattern) : null;
 
 					try {
-						LocalDateTime ldt = LocalDateTime.parse(dateSource, inputFormatter);
+						LocalDateTime ldt = LocalDateTime.parse(normalizedDateSource, inputFormatter);
 
+						if (forceNoFhir) {
+							String out = (outputFormatter != null)
+									? ldt.atZone(ZoneOffset.UTC).format(outputFormatter)
+									: normalizedDateSource;
+							return new StringType(out);
+						}
 						if (forceInstant) {
 							return new InstantType(
 									Date.from(ldt.atZone(ZoneOffset.UTC).toInstant()));
@@ -1682,7 +1989,19 @@ public class Mapper {
 
 					} catch (Exception e1) {
 						try {
-							LocalDate ld = LocalDate.parse(dateSource, inputFormatter);
+							LocalDate ld = LocalDate.parse(normalizedDateSource, inputFormatter);
+
+							if (forceNoFhir) {
+								if (outputFormatter != null) {
+									if (patternNeedsTime(outputPattern)) {
+										String out =
+												ld.atStartOfDay(ZoneOffset.UTC).format(outputFormatter);
+										return new StringType(out);
+									}
+									return new StringType(ld.format(outputFormatter));
+								}
+								return new StringType(normalizedDateSource);
+							}
 
 							if (forceInstant) {
 								return new InstantType(Date.from(
@@ -1691,18 +2010,29 @@ public class Mapper {
 							if (forceTime) {
 								return new TimeType("00:00:00");
 							}
+
 							if (outputFormatter != null) {
-								String formatted =
-										ld.atStartOfDay(ZoneOffset.UTC).format(outputFormatter);
+								if (patternNeedsTime(outputPattern)) {
+									String formatted =
+											ld.atStartOfDay(ZoneOffset.UTC).format(outputFormatter);
+									return new DateTimeType(formatted);
+								}
+								String formatted = ld.format(outputFormatter);
 								return new DateTimeType(formatted);
 							}
+
 							return new DateType(
 									Date.from(ld.atStartOfDay(ZoneOffset.UTC).toInstant()));
-
 						} catch (Exception e2) {
 							try {
-								LocalTime lt = LocalTime.parse(dateSource, inputFormatter);
+								LocalTime lt = LocalTime.parse(normalizedDateSource, inputFormatter);
 
+								if (forceNoFhir) {
+									String out = (outputFormatter != null)
+											? lt.format(outputFormatter)
+											: normalizedDateSource;
+									return new StringType(out);
+								}
 								if (forceInstant) {
 									LocalDateTime ldt = lt.atDate(LocalDate.now());
 									return new InstantType(
@@ -1715,6 +2045,14 @@ public class Mapper {
 								return new TimeType(formatted);
 
 							} catch (Exception e3) {
+								if (looksLikeDate(normalizedDateSource)) {
+									throw new IllegalArgumentException(
+											String.format(
+													"Could not parse date '%s' with input format '%s'",
+													dateSource, inputFormat),
+											e2);
+								}
+
 								throw new IllegalArgumentException(
 										String.format(
 												"Could not parse date/time '%s' with input format '%s'",
@@ -1741,6 +2079,48 @@ public class Mapper {
 							context.getTarget().toString(), context.getRule().getName(), e.getMessage()),
 					e);
 		}
+	}
+
+	private static boolean isMode(String s) {
+		if (s == null) return false;
+		String t = s.trim();
+		return "instant".equalsIgnoreCase(t) || "time".equalsIgnoreCase(t) || "nofhir".equalsIgnoreCase(t);
+	}
+
+	private static boolean looksLikeDate(String s) {
+		if (s == null) return false;
+		String t = s.trim();
+		// ISO date or starts with yyyy
+		return t.contains("-") || t.matches("^\\d{4}.*");
+	}
+
+	private static String normalize(String s) {
+		if (s == null) return null;
+		String t = s.trim();
+
+		// remove wrapping quotes
+		if ((t.startsWith("'") && t.endsWith("'")) || (t.startsWith("\"") && t.endsWith("\""))) {
+			t = t.substring(1, t.length() - 1).trim();
+		}
+
+		// replace NBSP-like spaces then trim
+		t = t.replace('\u00A0', ' ')
+				.replace('\u2007', ' ')
+				.replace('\u202F', ' ')
+				.trim();
+
+		return t;
+	}
+
+	private static boolean patternNeedsTime(String pattern) {
+		if (pattern == null) return false;
+		return pattern.contains("H")
+				|| pattern.contains("h")
+				|| pattern.contains("m")
+				|| pattern.contains("s")
+				|| pattern.contains("S")
+				|| pattern.contains("n")
+				|| pattern.contains("a"); // am/pm
 	}
 
 	private String normalizeAppendParam(String value) {
@@ -2496,9 +2876,9 @@ public class Mapper {
 			StringType rdp = dependent.getVariable().get(i);
 			String var = rdp.asStringValue();
 			Variable.VariableMode mode = input.getMode() == StructureMap.StructureMapInputMode.SOURCE ? INPUT : OUTPUT;
-			Base vv = (Base) context.getVariables().get(mode, var);
+			Object vv = context.getVariables().get(mode, var);
 			if (vv == null && mode == INPUT) {
-				vv = (Base) context.getVariables().get(OUTPUT, var);
+				vv = context.getVariables().get(OUTPUT, var);
 			}
 			if (vv == null) {
 				throw new FHIRException(String.format(
@@ -2602,7 +2982,7 @@ public class Mapper {
 	 * Resolves and merges all imports for a given StructureMap.
 	 * Supports recursive imports and conflict resolution (local overrides imported).
 	 */
-	StructureMap resolveImports(StructureMap original, Set<String> visited) {
+	StructureMap resolveImports(StructureMap original, Set<String> visited, List<StructureMap> importedMaps) {
 		if (original == null || original.getUrl() == null || original.getUrl().isEmpty()) {
 			throw new InvalidRequestException("StructureMap URL cannot be null");
 		}
@@ -2616,15 +2996,28 @@ public class Mapper {
 
 		for (UriType importUrl : original.getImport()) {
 			String importCanonical = importUrl.getValue();
-			StructureMap importedMap = fetchStructureMapByUrl(importCanonical);
 
-			if (importedMap == null) {
+			if (visited.contains(importCanonical)) {
+				continue;
+			} else if (structureMapResolver.containsWildcard(importCanonical)) {
+				visited.add(importCanonical);
+			}
+			List<StructureMap> fetchedMaps = structureMapResolver.fetchStructureMapByUrl(importCanonical);
+
+			if (fetchedMaps == null) {
 				throw new InvalidRequestException("Unable to find imported StructureMap: " + importCanonical);
 			}
 
-			importedMap = resolveImports(importedMap, visited);
+			for (StructureMap fetchedMap : fetchedMaps) {
+				if (!fetchedMap.getUrl().equals(original.getUrl()) && !visited.contains(fetchedMap.getUrl())) {
+					importedMaps.add(fetchedMap);
 
-			mergeStructureMaps(resolvedMap, importedMap);
+					fetchedMap = resolveImports(fetchedMap, visited, importedMaps);
+
+					visited.add(fetchedMap.getUrl());
+					mergeStructureMaps(resolvedMap, fetchedMap);
+				}
+			}
 		}
 		return resolvedMap;
 	}

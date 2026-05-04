@@ -4,27 +4,8 @@ import ca.uhn.hl7v2.HL7Exception;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class Path {
-
-	private static final Pattern PATH_PATTERN = Pattern.compile("^" + "((?:[A-Za-z0-9_]+(?:\\[[0-9]+])?\\.)*)"
-			+ // nested group(s), each optionally repeated
-			"([A-Z0-9]+)"
-			+ // segment
-			"(?:\\[([0-9]+)])?"
-			+ // optional segment repetition
-			"(?:-"
-			+ "([1-9][0-9]*)"
-			+ // field
-			"(?:\\[([0-9]+)])?"
-			+ // field repetition
-			"(?:-([1-9][0-9]*))?"
-			+ // component
-			"(?:-([1-9][0-9]*))?"
-			+ // subcomponent
-			")?$");
 
 	private final List<String> groups = new ArrayList<>();
 	private final List<Integer> groupRepetitions = new ArrayList<>();
@@ -32,43 +13,195 @@ public class Path {
 	private final String segment;
 	private final Integer segmentRepetition;
 
+	private final String terminalGroup;
+	private final Integer terminalGroupRepetition;
+
 	private final Integer field;
 	private final Integer fieldRepetition;
 	private final Integer component;
 	private final Integer subComponent;
 
 	public Path(String path) throws HL7Exception {
-		Matcher matcher = PATH_PATTERN.matcher(path);
-		if (!matcher.matches()) {
+		if (path == null || path.isBlank()) {
 			throw new HL7Exception("Invalid path: " + path);
 		}
 
-		String groupsPart = matcher.group(1);
-		if (!groupsPart.isEmpty()) {
-			String[] parts = groupsPart.split("\\.");
-			for (String part : parts) {
-				if (part.isEmpty()) continue;
-				if (part.contains("[")) {
-					int start = part.indexOf('[');
-					int end = part.indexOf(']');
-					String name = part.substring(0, start);
-					int rep = Integer.parseInt(part.substring(start + 1, end));
-					groups.add(name);
-					groupRepetitions.add(rep);
-				} else {
-					groups.add(part);
-					groupRepetitions.add(null);
-				}
+		String trimmed = path.trim();
+		if (trimmed.isEmpty()) {
+			throw new HL7Exception("Invalid path: " + path);
+		}
+
+		// Refuse explicit malformed dotted paths
+		if (trimmed.startsWith(".") || trimmed.endsWith(".") || trimmed.contains("..")) {
+			throw new HL7Exception("Invalid path: " + path);
+		}
+
+		String head = trimmed;
+		String tail = null;
+
+		int dash = trimmed.indexOf('-');
+		if (dash >= 0) {
+			head = trimmed.substring(0, dash);
+			tail = trimmed.substring(dash + 1);
+
+			if (tail.isBlank()) {
+				throw new HL7Exception("Invalid path: " + path);
 			}
 		}
 
-		this.segment = matcher.group(2);
-		this.segmentRepetition = matcher.group(3) != null ? Integer.parseInt(matcher.group(3)) : null;
+		String[] tokens = head.split("\\.", -1);
+		if (tokens.length == 0) {
+			throw new HL7Exception("Invalid path: " + path);
+		}
 
-		this.field = matcher.group(4) != null ? Integer.parseInt(matcher.group(4)) : null;
-		this.fieldRepetition = matcher.group(5) != null ? Integer.parseInt(matcher.group(5)) : null;
-		this.component = matcher.group(6) != null ? Integer.parseInt(matcher.group(6)) - 1 : null;
-		this.subComponent = matcher.group(7) != null ? Integer.parseInt(matcher.group(7)) - 1 : null;
+		for (String token : tokens) {
+			if (token == null || token.isBlank()) {
+				throw new HL7Exception("Invalid path: " + path);
+			}
+		}
+
+		String lastToken = tokens[tokens.length - 1];
+
+		String parsedSegment = null;
+		Integer parsedSegmentRep = null;
+		String parsedTerminalGroup = null;
+		Integer parsedTerminalGroupRep = null;
+
+		boolean hasFieldPart = tail != null;
+
+		TokenPart last = parseTokenStrict(lastToken, path);
+
+		if (hasFieldPart) {
+			if (!looksLikeSegmentToken(last.name())) {
+				throw new HL7Exception("Invalid path: " + path);
+			}
+			parsedSegment = last.name();
+			parsedSegmentRep = last.repetition();
+
+			for (int i = 0; i < tokens.length - 1; i++) {
+				TokenPart gp = parseTokenStrict(tokens[i], path);
+				groups.add(gp.name());
+				groupRepetitions.add(gp.repetition());
+			}
+		} else if (looksLikeSegmentToken(last.name())) {
+			parsedSegment = last.name();
+			parsedSegmentRep = last.repetition();
+
+			for (int i = 0; i < tokens.length - 1; i++) {
+				TokenPart gp = parseTokenStrict(tokens[i], path);
+				groups.add(gp.name());
+				groupRepetitions.add(gp.repetition());
+			}
+		} else {
+			// Support group-only path
+			if (tokens.length < 2) {
+				throw new HL7Exception("Invalid path: " + path);
+			}
+
+			parsedTerminalGroup = last.name();
+			parsedTerminalGroupRep = last.repetition();
+
+			for (int i = 0; i < tokens.length - 1; i++) {
+				TokenPart gp = parseTokenStrict(tokens[i], path);
+				groups.add(gp.name());
+				groupRepetitions.add(gp.repetition());
+			}
+		}
+
+		this.segment = parsedSegment;
+		this.segmentRepetition = parsedSegmentRep;
+		this.terminalGroup = parsedTerminalGroup;
+		this.terminalGroupRepetition = parsedTerminalGroupRep;
+
+		Integer parsedField = null;
+		Integer parsedFieldRep = null;
+		Integer parsedComponent = null;
+		Integer parsedSubComponent = null;
+
+		if (tail != null) {
+			String[] fieldParts = tail.split("-", -1);
+			if (fieldParts.length < 1 || fieldParts.length > 3) {
+				throw new HL7Exception("Invalid path: " + path);
+			}
+
+			for (String fieldPart : fieldParts) {
+				if (fieldPart == null || fieldPart.isBlank()) {
+					throw new HL7Exception("Invalid path: " + path);
+				}
+			}
+
+			TokenPart fieldToken = parseTokenStrict(fieldParts[0], path);
+			if (fieldToken.name() == null || !fieldToken.name().matches("[1-9][0-9]*")) {
+				throw new HL7Exception("Invalid path: " + path);
+			}
+			parsedField = Integer.parseInt(fieldToken.name());
+			parsedFieldRep = fieldToken.repetition();
+
+			if (fieldParts.length >= 2) {
+				if (!fieldParts[1].matches("[1-9][0-9]*")) {
+					throw new HL7Exception("Invalid path: " + path);
+				}
+				parsedComponent = Integer.parseInt(fieldParts[1]) - 1;
+			}
+
+			if (fieldParts.length == 3) {
+				if (!fieldParts[2].matches("[1-9][0-9]*")) {
+					throw new HL7Exception("Invalid path: " + path);
+				}
+				parsedSubComponent = Integer.parseInt(fieldParts[2]) - 1;
+			}
+		}
+
+		this.field = parsedField;
+		this.fieldRepetition = parsedFieldRep;
+		this.component = parsedComponent;
+		this.subComponent = parsedSubComponent;
+	}
+
+	private boolean looksLikeSegmentToken(String token) {
+		return token != null && token.matches("^[A-Z0-9]{2,4}$");
+	}
+
+	private TokenPart parseTokenStrict(String token, String originalPath) throws HL7Exception {
+		if (token == null || token.isBlank()) {
+			throw new HL7Exception("Invalid path: " + originalPath);
+		}
+
+		String t = token.trim();
+
+		if (!t.contains("[") && !t.contains("]")) {
+			if (!t.matches("^[A-Za-z0-9_]+$")) {
+				throw new HL7Exception("Invalid path: " + originalPath);
+			}
+			return new TokenPart(t, null);
+		}
+
+		if (!t.matches("^[A-Za-z0-9_]+\\[[0-9]+\\]$")) {
+			throw new HL7Exception("Invalid path: " + originalPath);
+		}
+
+		int start = t.indexOf('[');
+		int end = t.indexOf(']');
+
+		String name = t.substring(0, start);
+		String repStr = t.substring(start + 1, end);
+
+		if (name.isBlank() || !name.matches("^[A-Za-z0-9_]+$")) {
+			throw new HL7Exception("Invalid path: " + originalPath);
+		}
+		if (!repStr.matches("[0-9]+")) {
+			throw new HL7Exception("Invalid path: " + originalPath);
+		}
+
+		return new TokenPart(name, Integer.parseInt(repStr));
+	}
+
+	public boolean isGroupOnly() {
+		return terminalGroup != null && segment == null;
+	}
+
+	public boolean hasSegment() {
+		return segment != null;
 	}
 
 	public List<String> getGroups() {
@@ -85,6 +218,14 @@ public class Path {
 
 	public Integer getSegmentRepetition() {
 		return segmentRepetition;
+	}
+
+	public String getTerminalGroup() {
+		return terminalGroup;
+	}
+
+	public Integer getTerminalGroupRepetition() {
+		return terminalGroupRepetition;
 	}
 
 	public Integer getField() {
@@ -109,10 +250,14 @@ public class Path {
 				+ groups + ", groupRepetitions="
 				+ groupRepetitions + ", segment='"
 				+ segment + '\'' + ", segmentRepetition="
-				+ segmentRepetition + ", field="
+				+ segmentRepetition + ", terminalGroup='"
+				+ terminalGroup + '\'' + ", terminalGroupRepetition="
+				+ terminalGroupRepetition + ", field="
 				+ field + ", fieldRepetition="
 				+ fieldRepetition + ", component="
 				+ component + ", subComponent="
 				+ subComponent + '}';
 	}
+
+	private record TokenPart(String name, Integer repetition) {}
 }
