@@ -29,8 +29,8 @@ public class MappingConfig {
 	}
 
 	@Bean
-	public TransformProvider transformOperationProvider(IFhirResourceDao<StructureMap> structureMapDao,
-																 MatchboxTransformService matchboxTransformService) {
+	public TransformProvider transformOperationProvider(
+			IFhirResourceDao<StructureMap> structureMapDao, MatchboxTransformService matchboxTransformService) {
 		return new TransformProvider(structureMapDao, matchboxTransformService);
 	}
 }

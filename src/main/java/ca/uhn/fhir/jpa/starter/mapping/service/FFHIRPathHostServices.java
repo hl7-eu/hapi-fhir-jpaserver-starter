@@ -74,11 +74,11 @@ public class FFHIRPathHostServices implements IHostApplicationServices {
 	}
 
 	@Override
-	public Base resolveReference(FHIRPathEngine fhirPathEngine, Object o, String s, Identifier identifier, Base base) throws FHIRException {
+	public Base resolveReference(FHIRPathEngine fhirPathEngine, Object o, String s, Identifier identifier, Base base)
+			throws FHIRException {
 		throw new NotImplementedException(
-			"Not done yet (FFHIRPathHostServices.conformsToProfile), when item is element");
+				"Not done yet (FFHIRPathHostServices.conformsToProfile), when item is element");
 	}
-
 
 	@Override
 	public boolean conformsToProfile(FHIRPathEngine fpe, Object appContext, Base item, String url)

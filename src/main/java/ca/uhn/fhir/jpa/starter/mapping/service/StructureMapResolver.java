@@ -26,10 +26,7 @@ public class StructureMapResolver {
 	private final IFhirResourceDao<StructureMap> structureMapDao;
 	private static final Logger logger = LoggerFactory.getLogger(StructureMapResolver.class);
 
-	public StructureMapResolver(
-			IGenericClient clientStructureMap,
-			IFhirResourceDao<StructureMap> structureMapDao
-	) {
+	public StructureMapResolver(IGenericClient clientStructureMap, IFhirResourceDao<StructureMap> structureMapDao) {
 		this.clientStructureMap = clientStructureMap;
 		this.structureMapDao = structureMapDao;
 	}
@@ -148,8 +145,7 @@ public class StructureMapResolver {
 	}
 
 	private StructureMap fetchLocalByExactUrl(String url) {
-		SearchParameterMap searchMap = new SearchParameterMap()
-				.add("url", new UriParam(url));
+		SearchParameterMap searchMap = new SearchParameterMap().add("url", new UriParam(url));
 
 		IBundleProvider search = structureMapDao.search(searchMap);
 

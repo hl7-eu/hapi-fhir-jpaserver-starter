@@ -1,12 +1,12 @@
 package ca.uhn.fhir.jpa.starter.mapping.service;
 
+import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.jpa.starter.mapping.model.exception.MatchboxTransformException;
 import ch.ahdis.matchbox.engine.CdaMappingEngine;
 import ch.ahdis.matchbox.engine.MatchboxEngine;
-import ca.uhn.fhir.context.FhirContext;
+import org.hl7.fhir.r4.model.MetadataResource;
 import org.hl7.fhir.r4.model.StructureDefinition;
 import org.hl7.fhir.r4.model.StructureMap;
-import org.hl7.fhir.r4.model.MetadataResource;
 
 import java.util.List;
 import java.util.Objects;
@@ -42,8 +42,12 @@ public class MatchboxTransformService {
 	 * @param outputJson   	if true, will return JSON, XML otherwise
 	 * @return transformed resource
 	 */
-	public String transform(StructureMap structureMap, List<StructureMap> dependencies,
-									List<StructureDefinition> customModel, String sourceString, boolean outputJson) {
+	public String transform(
+			StructureMap structureMap,
+			List<StructureMap> dependencies,
+			List<StructureDefinition> customModel,
+			String sourceString,
+			boolean outputJson) {
 		Objects.requireNonNull(structureMap, "structureMap must not be null");
 		Objects.requireNonNull(sourceString, "sourceString must not be null");
 
@@ -69,17 +73,10 @@ public class MatchboxTransformService {
 			registerCanonicalResource(requestEngine, structureMap);
 
 			return requestEngine.transform(
-				sourceString,
-				!sourceString.startsWith("<"),
-				structureMap.getUrl(),
-				outputJson,
-				null
-			);
+					sourceString, !sourceString.startsWith("<"), structureMap.getUrl(), outputJson, null);
 		} catch (Exception e) {
 			throw new MatchboxTransformException(
-				"Error during transform with StructureMap " + structureMap.getUrl(),
-				e
-			);
+					"Error during transform with StructureMap " + structureMap.getUrl(), e);
 		}
 	}
 
@@ -110,10 +107,7 @@ public class MatchboxTransformService {
 		try {
 			engine.addCanonicalResource(resource);
 		} catch (Exception e) {
-			throw new MatchboxTransformException(
-				"Error saving resource in MatchboxEngine: " + resource.getUrl(),
-				e
-			);
+			throw new MatchboxTransformException("Error saving resource in MatchboxEngine: " + resource.getUrl(), e);
 		}
 	}
 }

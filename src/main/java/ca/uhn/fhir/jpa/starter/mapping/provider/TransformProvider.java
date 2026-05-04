@@ -43,8 +43,8 @@ public class TransformProvider {
 
 	private MatchboxTransformService matchboxTransformService;
 
-	public TransformProvider(IFhirResourceDao<StructureMap> theStructureMapDao,
-									 MatchboxTransformService theMatchboxTransformService) {
+	public TransformProvider(
+			IFhirResourceDao<StructureMap> theStructureMapDao, MatchboxTransformService theMatchboxTransformService) {
 		myStructureMapDao = theStructureMapDao;
 		matchboxTransformService = theMatchboxTransformService;
 	}
@@ -168,8 +168,7 @@ public class TransformProvider {
 				terminologyUrl != null ? new TransformerService(terminologyUrl) : null,
 				myStructureMapDao,
 				clientStructureMap,
-				matchboxTransformService
-			);
+				matchboxTransformService);
 
 		////////////////////////////////////////////////////////////////
 

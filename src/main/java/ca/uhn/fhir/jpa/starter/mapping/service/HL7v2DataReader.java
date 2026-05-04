@@ -29,7 +29,9 @@ public class HL7v2DataReader {
 		try (HapiContext context = new DefaultHapiContext()) {
 			Parser parser = context.getGenericParser();
 			String hl7v2Content = new String(Base64.getDecoder().decode(content), StandardCharsets.UTF_8)
-				.replace("\r\n", "\r").replace("\n", "\r");;
+					.replace("\r\n", "\r")
+					.replace("\n", "\r");
+			;
 			Message msg = parser.parse(hl7v2Content);
 			logger.info("HL7v2 parsed class = {}", msg.getClass().getName());
 			return msg;

@@ -83,8 +83,7 @@ public class Path {
 				groups.add(gp.name());
 				groupRepetitions.add(gp.repetition());
 			}
-		}
-		else if (looksLikeSegmentToken(last.name())) {
+		} else if (looksLikeSegmentToken(last.name())) {
 			parsedSegment = last.name();
 			parsedSegmentRep = last.repetition();
 
@@ -247,20 +246,18 @@ public class Path {
 
 	@Override
 	public String toString() {
-		return "Path{" +
-			"groups=" + groups +
-			", groupRepetitions=" + groupRepetitions +
-			", segment='" + segment + '\'' +
-			", segmentRepetition=" + segmentRepetition +
-			", terminalGroup='" + terminalGroup + '\'' +
-			", terminalGroupRepetition=" + terminalGroupRepetition +
-			", field=" + field +
-			", fieldRepetition=" + fieldRepetition +
-			", component=" + component +
-			", subComponent=" + subComponent +
-			'}';
+		return "Path{" + "groups="
+				+ groups + ", groupRepetitions="
+				+ groupRepetitions + ", segment='"
+				+ segment + '\'' + ", segmentRepetition="
+				+ segmentRepetition + ", terminalGroup='"
+				+ terminalGroup + '\'' + ", terminalGroupRepetition="
+				+ terminalGroupRepetition + ", field="
+				+ field + ", fieldRepetition="
+				+ fieldRepetition + ", component="
+				+ component + ", subComponent="
+				+ subComponent + '}';
 	}
 
-	private record TokenPart(String name, Integer repetition) {
-	}
+	private record TokenPart(String name, Integer repetition) {}
 }
