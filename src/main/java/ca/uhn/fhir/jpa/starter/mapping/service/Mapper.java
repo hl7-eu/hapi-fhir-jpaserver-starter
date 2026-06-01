@@ -393,11 +393,119 @@ public class Mapper {
 			executeGroup(childContext, false);
 		}
 
-		// Then execute rules from the group.
-		for (StructureMap.StructureMapGroupRuleComponent rule :
-				context.getGroup().getRule()) {
-			context.setRule(rule);
-			executeRule(context, atRoot);
+		// Check if this group has CSV sources - if so, use row-by-row processing
+		if (hasCSVSourceInGroup(context)) {
+			executeGroupByCSVRows(context, atRoot);
+		} else {
+			// Standard rule-by-rule processing
+			for (StructureMap.StructureMapGroupRuleComponent rule :
+					context.getGroup().getRule()) {
+				context.setRule(rule);
+				executeRule(context, atRoot);
+			}
+		}
+	}
+
+	/**
+	 * Check if any rule in the group has a CSV source.
+	 * @param context the Mapping context
+	 * @return true if at least one rule has a CSV source
+	 */
+	private boolean hasCSVSourceInGroup(MappingContext context) {
+		for (StructureMap.StructureMapGroupRuleComponent rule : context.getGroup().getRule()) {
+			if (!rule.getSource().isEmpty()) {
+				String sourceContext = rule.getSource().get(0).getContext();
+				String type = context.getGroup().getInput().stream()
+						.filter(input -> sourceContext.equals(input.getName()))
+						.map(StructureMap.StructureMapGroupInputComponent::getType)
+						.findFirst()
+						.orElseGet(() -> {
+							Object source = context.getVariables().get(INPUT, sourceContext);
+							if (source == null) {
+								source = context.getVariables().get(OUTPUT, sourceContext);
+							}
+							if (source instanceof Structure) {
+								return "HL7v2";
+							} else if (source instanceof CSVRecords || source instanceof CSVRecord) {
+								return "CSV";
+							} else if (source instanceof HPRIMMessage || source instanceof HPRIMSegment) {
+								return "HPRIM";
+							} else if (source instanceof JSONObject) {
+								return "JSON";
+							} else {
+								return "DEFAULT";
+							}
+						});
+				if ("CSV".equals(type)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Extract all CSV records from the group inputs.
+	 * @param context the Mapping context
+	 * @return the CSVRecords object or null if not found
+	 */
+	private CSVRecords extractCSVRecordsFromGroup(MappingContext context) {
+		for (StructureMap.StructureMapGroupRuleComponent rule : context.getGroup().getRule()) {
+			if (!rule.getSource().isEmpty()) {
+				String sourceContext = rule.getSource().get(0).getContext();
+				Object source = context.getVariables().get(INPUT, sourceContext);
+				if (source == null) {
+					source = context.getVariables().get(OUTPUT, sourceContext);
+				}
+				if (source instanceof CSVRecords) {
+					return (CSVRecords) source;
+				}
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Execute all rules in a group for each CSV row (row-by-row processing).
+	 * This inverts the normal execution order: instead of executing one rule
+	 * on all rows, this executes all rules on one row at a time.
+	 *
+	 * @param context the Mapping context.
+	 * @param atRoot  true if this is a root group.
+	 */
+	private void executeGroupByCSVRows(MappingContext context, boolean atRoot) {
+		CSVRecords csvRecords = extractCSVRecordsFromGroup(context);
+		if (csvRecords == null || csvRecords.getRecords().isEmpty()) {
+			return;
+		}
+
+		// For each CSV row
+		for (CSVRecord csvRecord : csvRecords.getRecords()) {
+			// Execute ALL rules for this row
+			for (StructureMap.StructureMapGroupRuleComponent rule :
+					context.getGroup().getRule()) {
+				
+				// Find the CSV source context name
+				if (!rule.getSource().isEmpty()) {
+					String sourceContext = rule.getSource().get(0).getContext();
+					
+					// Prepare variables for this CSV record
+					Variables rowVariables = context.getVariables().copy();
+					
+					// Create a single-record CSVRecords object for this row
+					CSVRecords singleRowRecords = new CSVRecords(
+							Collections.singletonList(csvRecord));
+					rowVariables.add(INPUT, sourceContext, singleRowRecords);
+
+					// Execute the rule with this row's variables
+					MappingContext ruleContext = new MappingContext(
+							context.getStructureMap(),
+							context.getGroup(),
+							rowVariables);
+					ruleContext.setRule(rule);
+					executeRule(ruleContext, atRoot);
+				}
+			}
 		}
 	}
 
