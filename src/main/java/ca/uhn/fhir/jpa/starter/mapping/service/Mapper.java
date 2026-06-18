@@ -754,7 +754,9 @@ public class Mapper {
 		if (source.hasVariable()) {
 			for (Object base : items) {
 				Variables variables = localVariables.copy();
-				variables.add(INPUT, source.getVariable(), base);
+				if (base != null) {
+					variables.add(INPUT, source.getVariable(), base);
+				}
 				result.add(variables);
 			}
 		}
@@ -1184,6 +1186,8 @@ public class Mapper {
 						break;
 					}
 					items.add(item);
+				} else if (source.hasCondition() && matchesCondition(source, null, context.getVariables())) {
+					items.add(null);
 				} else {
 					logger.info("Field not found in HL7v2 source : {}", source.getElement());
 				}
@@ -1571,7 +1575,8 @@ public class Mapper {
 			StructureMap.StructureMapGroupRuleSourceComponent source, Base item, Variables variables) {
 		if (source.hasCondition()) {
 			ExpressionNode expression = fhirPathEngine.parse(source.getCondition());
-			return fhirPathEngine.evaluateToBoolean(variables, null, null, item, expression);
+			Base safeItem = item != null ? item : new StringType();
+			return fhirPathEngine.evaluateToBoolean(variables, null, null, safeItem, expression);
 		}
 		return true;
 	}

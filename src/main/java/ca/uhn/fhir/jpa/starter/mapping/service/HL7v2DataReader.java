@@ -6,6 +6,7 @@ import ca.uhn.hl7v2.HL7Exception;
 import ca.uhn.hl7v2.HapiContext;
 import ca.uhn.hl7v2.model.Message;
 import ca.uhn.hl7v2.parser.Parser;
+import ca.uhn.hl7v2.validation.impl.ValidationContextFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,10 +29,13 @@ public class HL7v2DataReader {
 	public static Message parseData(String content) {
 		try (HapiContext context = new DefaultHapiContext()) {
 			Parser parser = context.getGenericParser();
+			context.setValidationContext(ValidationContextFactory.noValidation());
+			context.getParserConfiguration().setInvalidObx2Type("ST");
+
 			String hl7v2Content = new String(Base64.getDecoder().decode(content), StandardCharsets.UTF_8)
 					.replace("\r\n", "\r")
 					.replace("\n", "\r");
-			;
+
 			Message msg = parser.parse(hl7v2Content);
 			logger.info("HL7v2 parsed class = {}", msg.getClass().getName());
 			return msg;
