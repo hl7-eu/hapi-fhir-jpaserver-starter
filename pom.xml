@@ -22,7 +22,7 @@
         <spring_boot_version>3.5.9</spring_boot_version>
         <postgresql.version>42.7.9</postgresql.version>
         <logback_version>1.5.25</logback_version>
-        <fhir.core.version>6.9.1</fhir.core.version>
+        <fhir.core.version>6.9.4.1</fhir.core.version>
     </properties>
 
     <!-- one-liner to take you to the cloud with settings form the application.yaml file: -->
@@ -36,11 +36,11 @@
     <parent>
         <groupId>ca.uhn.hapi.fhir</groupId>
         <artifactId>hapi-fhir</artifactId>
-        <version>8.8.0</version>
+        <version>8.10.0</version>
     </parent>
 
     <artifactId>hapi-fhir-jpaserver-starter</artifactId>
-    <version>mapping-2.6.1-SNAPSHOT</version>
+    <version>mapping-2.7.0</version>
     <packaging>war</packaging>
 
     <name>HAPI FHIR JPA Server - Starter Project</name>
@@ -522,7 +522,7 @@
         <dependency>
             <groupId>health.matchbox</groupId>
             <artifactId>matchbox-engine</artifactId>
-            <version>4.1.0</version>
+            <version>4.1.7</version>
         </dependency>
         <dependency>
             <groupId>ca.uhn.hapi.fhir</groupId>
