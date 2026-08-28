@@ -37,7 +37,10 @@ public class MapperTestHL7v2ToFHIR {
 		+ "AL1||SEV|001^POLLEN\r"
 		+ "GT1||0222PL|NOTREAL^BOB^B||STREET^OTHER STREET^CITY^ST^77787|(444)999-3333|(222)777-5555||||MO|111-33-5555||||NOTREAL GILL N|STREET^OTHER STREET^CITY^ST^99999|(111)222-3333\r"
 		+ "IN1||022254P|4558PD|BLUE CROSS|STREET^OTHER STREET^CITY^ST^00990||(333)333-6666||221K|LENIX|||19980515|19990515|||PATIENT01 TEST D||||||||||||||||||02LL|022LP554";
-
+	private final String hl7v2MessageObxAbsentValue = "MSH|^~\\&|LAB|RIH|FHIR|FHIR|199904140038||ORU^R01||P|2.3\r"
+		+ "PID|1||00001122^^^RIH^MR||SMITH^JOHN\r"
+		+ "OBR|1||ORDER1|TEST^Test observation\r"
+		+ "OBX|1|ST|BMB08^Tec Ext  Biomerieux^L|| ||||||F||||Vir Biomol^59^COVNA^699^1^COVNA|JUL^LEVA Julien\r";
 
 	@Test
 	void mapHL7v2ToFHIR() {
@@ -99,6 +102,40 @@ public class MapperTestHL7v2ToFHIR {
 		assertEquals(0, patient.getName().size());
 	}
 
+	@Test
+	void mapHL7v2ToFHIRObservationDataAbsentReasonWhenObx5IsAbsent() {
+		FhirContext context = FhirContext.forR4();
+		PrePopulatedValidationSupport prePopulatedValidationSupport = new PrePopulatedValidationSupport(context);
+		this.validationSupport = new ValidationSupportChain(prePopulatedValidationSupport, new DefaultProfileValidationSupport(context));
+
+		this.hapiContext = new HapiWorkerContext(context, this.validationSupport);
+
+		FHIRPathEngine fhirPathEngine = new FHIRPathEngine(hapiContext);
+
+		IGenericClient clientStructureMap = null;
+		Mapper mapper = new Mapper(hapiContext, fhirPathEngine, null, structureMapDao, clientStructureMap, null);
+
+		Parameters.ParametersParameterComponent param = new Parameters.ParametersParameterComponent();
+		param.setName("input");
+
+		param.addPart(new Parameters.ParametersParameterComponent().setName("source")
+			.setResource(new Binary().setContentType("text/x-hl7-ft").setContentAsBase64(Base64.encode(hl7v2MessageObxAbsentValue.getBytes()))));
+
+		Parameters parameters = new Parameters().addParameter(param);
+
+		Parameters result = mapper.map(getStructureMapObservationDataAbsentReason(), parameters);
+
+		assertNotNull(result);
+		assertNotNull(result.getParameter("target").getResource());
+		assertTrue(result.getParameter("target").getResource() instanceof Binary);
+
+		Observation observation = (Observation) context.newJsonParser().parseResource(new ByteArrayInputStream(((Binary) result.getParameter("target").getResource()).getContent()));
+		assertFalse(observation.hasValue());
+		assertTrue(observation.hasDataAbsentReason());
+		assertEquals("http://terminology.hl7.org/CodeSystem/data-absent-reason", observation.getDataAbsentReason().getCodingFirstRep().getSystem());
+		assertEquals("unknown", observation.getDataAbsentReason().getCodingFirstRep().getCode());
+	}
+
 	private StructureMap getStructureMap() {
 		StructureMap structureMap = new StructureMap();
 		structureMap.setUrl("http://example.org/base");
@@ -140,6 +177,58 @@ public class MapperTestHL7v2ToFHIR {
 
 		rule.addSource(sourceFirstName);
 		rule.addTarget(targetGivenName);
+
+		group.addRule(rule);
+		structureMap.addGroup(group);
+
+		return structureMap;
+	}
+
+	private StructureMap getStructureMapObservationDataAbsentReason() {
+		StructureMap structureMap = new StructureMap();
+		structureMap.setUrl("http://example.org/observation-absent-reason");
+
+		StructureMap.StructureMapGroupComponent group = new StructureMap.StructureMapGroupComponent();
+		group.setName("main");
+		group.setTypeMode(StructureMap.StructureMapGroupTypeMode.NONE);
+
+		StructureMap.StructureMapGroupInputComponent inputSource = new StructureMap.StructureMapGroupInputComponent();
+		inputSource.setName("source");
+		inputSource.setType("HL7v2");
+		inputSource.setMode(StructureMap.StructureMapInputMode.SOURCE);
+
+		StructureMap.StructureMapGroupInputComponent inputTarget = new StructureMap.StructureMapGroupInputComponent();
+		inputTarget.setName("target");
+		inputTarget.setType("Observation");
+		inputTarget.setMode(StructureMap.StructureMapInputMode.TARGET);
+
+		group.addInput(inputSource);
+		group.addInput(inputTarget);
+
+		StructureMap.StructureMapGroupRuleComponent rule = new StructureMap.StructureMapGroupRuleComponent();
+		rule.setName("obxToObservationDataAbsentReason");
+
+		StructureMap.StructureMapGroupRuleSourceComponent sourceAbsentValue = new StructureMap.StructureMapGroupRuleSourceComponent();
+		sourceAbsentValue.setContext("source");
+		sourceAbsentValue.setElement("OBX-5");
+		sourceAbsentValue.setType("string");
+		sourceAbsentValue.setVariable("valueAbs");
+		sourceAbsentValue.setCondition("$this.exists().not()");
+
+		StructureMap.StructureMapGroupRuleTargetComponent targetDataAbsentReason = new StructureMap.StructureMapGroupRuleTargetComponent();
+		targetDataAbsentReason.setContext("target");
+		targetDataAbsentReason.setContextType(StructureMap.StructureMapContextType.VARIABLE);
+		targetDataAbsentReason.setElement("dataAbsentReason");
+		targetDataAbsentReason.setTransform(StructureMap.StructureMapTransform.CC);
+
+		targetDataAbsentReason.addParameter()
+			.setValue(new StringType("http://terminology.hl7.org/CodeSystem/data-absent-reason"));
+
+		targetDataAbsentReason.addParameter()
+			.setValue(new StringType("unknown"));
+
+		rule.addSource(sourceAbsentValue);
+		rule.addTarget(targetDataAbsentReason);
 
 		group.addRule(rule);
 		structureMap.addGroup(group);

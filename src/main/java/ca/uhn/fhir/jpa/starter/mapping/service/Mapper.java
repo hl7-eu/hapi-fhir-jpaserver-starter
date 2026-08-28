@@ -393,11 +393,118 @@ public class Mapper {
 			executeGroup(childContext, false);
 		}
 
-		// Then execute rules from the group.
+		// Check if this group has CSV sources - if so, use row-by-row processing
+		if (hasCSVSourceInGroup(context)) {
+			executeGroupByCSVRows(context, atRoot);
+		} else {
+			// Standard rule-by-rule processing
+			for (StructureMap.StructureMapGroupRuleComponent rule :
+					context.getGroup().getRule()) {
+				context.setRule(rule);
+				executeRule(context, atRoot);
+			}
+		}
+	}
+
+	/**
+	 * Check if any rule in the group has a CSV source.
+	 * @param context the Mapping context
+	 * @return true if at least one rule has a CSV source
+	 */
+	private boolean hasCSVSourceInGroup(MappingContext context) {
 		for (StructureMap.StructureMapGroupRuleComponent rule :
 				context.getGroup().getRule()) {
-			context.setRule(rule);
-			executeRule(context, atRoot);
+			if (!rule.getSource().isEmpty()) {
+				String sourceContext = rule.getSource().get(0).getContext();
+				String type = context.getGroup().getInput().stream()
+						.filter(input -> sourceContext.equals(input.getName()))
+						.map(StructureMap.StructureMapGroupInputComponent::getType)
+						.findFirst()
+						.orElseGet(() -> {
+							Object source = context.getVariables().get(INPUT, sourceContext);
+							if (source == null) {
+								source = context.getVariables().get(OUTPUT, sourceContext);
+							}
+							if (source instanceof Structure) {
+								return "HL7v2";
+							} else if (source instanceof CSVRecords || source instanceof CSVRecord) {
+								return "CSV";
+							} else if (source instanceof HPRIMMessage || source instanceof HPRIMSegment) {
+								return "HPRIM";
+							} else if (source instanceof JSONObject) {
+								return "JSON";
+							} else {
+								return "DEFAULT";
+							}
+						});
+				if ("CSV".equals(type)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Extract all CSV records from the group inputs.
+	 * @param context the Mapping context
+	 * @return the CSVRecords object or null if not found
+	 */
+	private CSVRecords extractCSVRecordsFromGroup(MappingContext context) {
+		for (StructureMap.StructureMapGroupRuleComponent rule :
+				context.getGroup().getRule()) {
+			if (!rule.getSource().isEmpty()) {
+				String sourceContext = rule.getSource().get(0).getContext();
+				Object source = context.getVariables().get(INPUT, sourceContext);
+				if (source == null) {
+					source = context.getVariables().get(OUTPUT, sourceContext);
+				}
+				if (source instanceof CSVRecords) {
+					return (CSVRecords) source;
+				}
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Execute all rules in a group for each CSV row (row-by-row processing).
+	 * This inverts the normal execution order: instead of executing one rule
+	 * on all rows, this executes all rules on one row at a time.
+	 *
+	 * @param context the Mapping context.
+	 * @param atRoot  true if this is a root group.
+	 */
+	private void executeGroupByCSVRows(MappingContext context, boolean atRoot) {
+		CSVRecords csvRecords = extractCSVRecordsFromGroup(context);
+		if (csvRecords == null || csvRecords.getRecords().isEmpty()) {
+			return;
+		}
+
+		// For each CSV row
+		for (CSVRecord csvRecord : csvRecords.getRecords()) {
+			// Execute ALL rules for this row
+			for (StructureMap.StructureMapGroupRuleComponent rule :
+					context.getGroup().getRule()) {
+
+				// Find the CSV source context name
+				if (!rule.getSource().isEmpty()) {
+					String sourceContext = rule.getSource().get(0).getContext();
+
+					// Prepare variables for this CSV record
+					Variables rowVariables = context.getVariables().copy();
+
+					// Create a single-record CSVRecords object for this row
+					CSVRecords singleRowRecords = new CSVRecords(Collections.singletonList(csvRecord));
+					rowVariables.add(INPUT, sourceContext, singleRowRecords);
+
+					// Execute the rule with this row's variables
+					MappingContext ruleContext =
+							new MappingContext(context.getStructureMap(), context.getGroup(), rowVariables);
+					ruleContext.setRule(rule);
+					executeRule(ruleContext, atRoot);
+				}
+			}
 		}
 	}
 
@@ -754,7 +861,9 @@ public class Mapper {
 		if (source.hasVariable()) {
 			for (Object base : items) {
 				Variables variables = localVariables.copy();
-				variables.add(INPUT, source.getVariable(), base);
+				if (base != null) {
+					variables.add(INPUT, source.getVariable(), base);
+				}
 				result.add(variables);
 			}
 		}
@@ -1184,6 +1293,8 @@ public class Mapper {
 						break;
 					}
 					items.add(item);
+				} else if (source.hasCondition() && matchesCondition(source, null, context.getVariables())) {
+					items.add(null);
 				} else {
 					logger.info("Field not found in HL7v2 source : {}", source.getElement());
 				}
@@ -1428,6 +1539,8 @@ public class Mapper {
 				} else if (hprimObject instanceof HPRIMSegment seg) {
 					if (seg.getName().equals(path.getSegment())) {
 						segments.add(seg);
+					} else {
+						segments.addAll(seg.getAttachedSegments(path.getSegment()));
 					}
 				}
 
@@ -1438,7 +1551,9 @@ public class Mapper {
 
 				HPRIMSegment segment = segments.get(path.getSegmentIndex() != null ? path.getSegmentIndex() : 0);
 
-				if (path.getField() == null) {
+				if (path.isRawSegmentReference()) {
+					item = getFHIRItem(segment.getRawSegment(), source.getType());
+				} else if (path.getField() == null) {
 					for (HPRIMSegment seg : segments) {
 						items.add(seg);
 					}
@@ -1571,7 +1686,8 @@ public class Mapper {
 			StructureMap.StructureMapGroupRuleSourceComponent source, Base item, Variables variables) {
 		if (source.hasCondition()) {
 			ExpressionNode expression = fhirPathEngine.parse(source.getCondition());
-			return fhirPathEngine.evaluateToBoolean(variables, null, null, item, expression);
+			Base safeItem = item != null ? item : new StringType();
+			return fhirPathEngine.evaluateToBoolean(variables, null, null, safeItem, expression);
 		}
 		return true;
 	}
@@ -2621,23 +2737,21 @@ public class Mapper {
 		} else {
 			ConceptMap cmap = null;
 			if (conceptMapUrl.startsWith("#")) {
-				for (Resource r : context.getStructureMap().getContained()) {
-					if (r instanceof ConceptMap && r.getId().equals(conceptMapUrl)) {
-						cmap = (ConceptMap) r;
-						su = context.getStructureMap().getUrl() + "#" + conceptMapUrl;
-					}
+				cmap = findContainedConceptMap(context.getStructureMap(), conceptMapUrl);
+				if (cmap != null) {
+					su = context.getStructureMap().getUrl() + conceptMapUrl;
 				}
 				if (cmap == null) throw new FHIRException("Unable to translate - cannot find map " + conceptMapUrl);
 			} else {
 				if (conceptMapUrl.contains("#")) {
 					String[] p = conceptMapUrl.split("\\#");
-					StructureMap mapU = worker.fetchResource(StructureMap.class, p[0]);
+					StructureMap mapU = context.getStructureMap().getUrl().equals(p[0])
+							? context.getStructureMap()
+							: worker.fetchResource(StructureMap.class, p[0]);
 					if (mapU != null) {
-						for (Resource r : mapU.getContained()) {
-							if (r instanceof ConceptMap && r.getId().equals(p[1])) {
-								cmap = (ConceptMap) r;
-								su = conceptMapUrl;
-							}
+						cmap = findContainedConceptMap(mapU, p[1]);
+						if (cmap != null) {
+							su = conceptMapUrl;
 						}
 					}
 				}
@@ -2713,6 +2827,34 @@ public class Mapper {
 				return outcome;
 			}
 		}
+	}
+
+	private ConceptMap findContainedConceptMap(StructureMap structureMap, String reference) {
+		if (structureMap == null || reference == null) {
+			return null;
+		}
+
+		String normalizedReference = normalizeContainedReference(reference);
+		for (Resource resource : structureMap.getContained()) {
+			if (!(resource instanceof ConceptMap conceptMap)) {
+				continue;
+			}
+
+			String containedId = conceptMap.getIdElement().getIdPart();
+			if (containedId == null) {
+				continue;
+			}
+
+			if (containedId.equals(normalizedReference)) {
+				return conceptMap;
+			}
+		}
+
+		return null;
+	}
+
+	private String normalizeContainedReference(String reference) {
+		return reference.startsWith("#") ? reference.substring(1) : reference;
 	}
 
 	/**

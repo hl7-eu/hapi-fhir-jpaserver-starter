@@ -4,10 +4,7 @@ import ca.uhn.fhir.rest.server.exceptions.InternalErrorException;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
+import org.w3c.dom.*;
 import org.xml.sax.InputSource;
 
 import java.io.StringReader;
@@ -22,6 +19,16 @@ public class XMLDataReader {
 
 	private static Map<String, Object> xmlToMap(Element element) {
 		Map<String, Object> map = new HashMap<>();
+
+		NamedNodeMap attributes = element.getAttributes();
+		for (int i = 0; i < attributes.getLength(); i++) {
+			Node node = attributes.item(i);
+			// These should be attributes node
+			if (node.getNodeType() == Node.ATTRIBUTE_NODE) {
+				map.put(node.getNodeName(), node.getNodeValue());
+			}
+		}
+
 		NodeList nodeList = element.getChildNodes();
 		for (int i = 0; i < nodeList.getLength(); i++) {
 			Node node = nodeList.item(i);
